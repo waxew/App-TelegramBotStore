@@ -708,6 +708,24 @@ fun V12Products(
         onChange(otherBotsProducts + ownedUpdated)
     }
 
+    // هنگام ورود به صفحه، Stock واقعی Backend روی Productهای محلی همان UUID Merge می‌شود؛ stockVersion عمداً دست‌نخورده می‌ماند.
+    LaunchedEffect(ownerBotId, ownerBot?.token) {
+        val token = ownerBot?.token.orEmpty()
+        if (token.isBlank()) return@LaunchedEffect
+
+        BotStoreInventoryApi.fetch(token).onSuccess { backendInventory ->
+            val merged = visibleProducts.map { product ->
+                backendInventory[product.id]?.let { remote ->
+                    product.copy(
+                        stockEnabled = remote.stockEnabled,
+                        stockQuantity = remote.stockQuantity
+                    )
+                } ?: product
+            }
+            if (merged != visibleProducts) saveVisibleProducts(merged)
+        }
+    }
+
     // Dialog افزودن محصول کنترل می‌شود.
     var add by remember { mutableStateOf(false) }
     // Product انتخاب‌شده برای ویرایش قیمت، دسته و موجودی نگهداری می‌شود.
@@ -832,6 +850,8 @@ fun V12Products(
                             category = category.trim(),
                             stockEnabled = stockEnabled,
                             stockQuantity = if (stockEnabled) stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0,
+                            // Product دارای Stock از اولین مقدار یک نسخه یکتا می‌گیرد تا Backend آن را به‌عنوان تنظیم عمدی فروشنده بپذیرد.
+                            stockVersion = if (stockEnabled) java.util.UUID.randomUUID().toString() else "",
                             botId = ownerBotId
                         )
                         saveVisibleProducts(visibleProducts + newProduct)
@@ -888,12 +908,20 @@ fun V12Products(
             confirmButton = {
                 Button(
                     onClick = {
+                        val nextStockQuantity = if (editStockEnabled)
+                            editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                        else 0
+                        val stockChanged = editStockEnabled != product.stockEnabled ||
+                            nextStockQuantity != product.stockQuantity
+
                         val updated = product.copy(
                             title = editTitle.trim(),
                             price = editPrice.toLongOrNull() ?: product.price,
                             category = editCategory.trim(),
                             stockEnabled = editStockEnabled,
-                            stockQuantity = if (editStockEnabled) editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0
+                            stockQuantity = nextStockQuantity,
+                            // تغییر قیمت/عنوان نسخه Stock را عوض نمی‌کند؛ فقط تغییر واقعی موجودی یک نسخه جدید می‌سازد.
+                            stockVersion = if (stockChanged) java.util.UUID.randomUUID().toString() else product.stockVersion
                         )
                         saveVisibleProducts(visibleProducts.map { old -> if (old.id == product.id) updated else old })
                         editingProduct = null

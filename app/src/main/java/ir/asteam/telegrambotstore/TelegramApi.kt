@@ -147,6 +147,7 @@ object TelegramApi {
                             .put("active", product.active)
                             .put("stock_enabled", product.stockEnabled)
                             .put("stock_quantity", product.stockQuantity.coerceAtLeast(0))
+                            .put("stock_version", product.stockVersion)
                     )
                 }
             }
