@@ -1,5 +1,5 @@
-// این فایل یک ContentProvider داخلی برای شروع خودکار موتور همگام‌سازی Catalog در زمان اجرای Process برنامه است.
-// Provider هیچ داده‌ای در اختیار برنامه‌های دیگر قرار نمی‌دهد و فقط تغییرات محصولات/دسته‌بندی/ربات‌ها را به Backend واقعی منتقل می‌کند.
+// این فایل یک ContentProvider داخلی برای شروع خودکار موتور همگام‌سازی Catalog و چرخه عمر Bot در زمان اجرای Process برنامه است.
+// Provider هیچ داده‌ای در اختیار برنامه‌های دیگر قرار نمی‌دهد و فقط تغییرات ربات‌ها، محصولات و دسته‌بندی‌ها را به Backend واقعی منتقل می‌کند.
 package ir.asteam.telegrambotstore
 
 import android.content.ContentProvider
@@ -16,9 +16,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// این Provider همراه Application ساخته می‌شود و بدون نیاز به تغییر در UI، Sync فروشگاه را در پس‌زمینه فعال می‌کند.
+// این Provider همراه Application ساخته می‌شود و بدون نیاز به تغییر در UI، Sync و حذف Runtime ربات را در پس‌زمینه فعال می‌کند.
 class CatalogSyncProvider : ContentProvider() {
-    // Scope مستقل I/O برای درخواست‌های شبکه Sync ساخته می‌شود تا Main Thread مسدود نشود.
+    // Scope مستقل I/O برای درخواست‌های شبکه ساخته می‌شود تا Main Thread مسدود نشود.
     private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Job آخرین Sync نگهداری می‌شود تا تغییرات پشت‌سرهم با debounce به یک درخواست تبدیل شوند.
@@ -30,15 +30,18 @@ class CatalogSyncProvider : ContentProvider() {
     // LocalStore همان لایه ذخیره‌سازی فعلی برنامه است و مدل‌های موجود را بدون تکرار Parser می‌خواند.
     private var localStore: LocalStore? = null
 
+    // Snapshot قبلی Botها نگهداری می‌شود تا حذف یک Bot از APK به حذف واقعی Runtime روی Backend تبدیل شود.
+    private var knownBots: List<ConnectedBot> = emptyList()
+
     // Listener باید به‌صورت property نگهداری شود تا Garbage Collector آن را حذف نکند.
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        // فقط تغییراتی که می‌توانند ظاهر فروشگاه Telegram را عوض کنند باعث Sync می‌شوند.
+        // فقط تغییراتی که می‌توانند Runtime یا ظاهر فروشگاه Telegram را عوض کنند باعث Reconcile می‌شوند.
         if (key == KEY_BOTS || key == KEY_PRODUCTS || key == KEY_CATEGORIES) {
-            scheduleCatalogSync()
+            scheduleBackendReconcile()
         }
     }
 
-    // هنگام ایجاد Process برنامه، Listener ثبت و یک Sync اولیه زمان‌بندی می‌شود.
+    // هنگام ایجاد Process برنامه، Snapshot اولیه، Listener و Sync اولیه آماده می‌شوند.
     override fun onCreate(): Boolean {
         // Context برنامه دریافت می‌شود؛ در نبود Context راه‌اندازی Provider ناموفق است.
         val appContext = context?.applicationContext ?: return false
@@ -46,38 +49,73 @@ class CatalogSyncProvider : ContentProvider() {
         // LocalStore برای خواندن Botها و Catalog ساخته می‌شود.
         localStore = LocalStore(appContext)
 
+        // Snapshot قبل از ثبت Listener خوانده می‌شود تا بعداً Bot حذف‌شده قابل تشخیص باشد.
+        knownBots = localStore?.loadBots().orEmpty()
+
         // همان SharedPreferences تاریخی پروژه باز می‌شود تا داده نسخه‌های قبلی نیز حفظ شود.
         preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).also { prefs ->
             // Listener تغییرات روی Preferences ثبت می‌شود.
             prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
         }
 
-        // Sync اولیه باعث می‌شود Catalog ذخیره‌شده پس از Update نیز به Backend صحیح منتقل شود.
-        scheduleCatalogSync(initialDelayMillis = INITIAL_SYNC_DELAY_MS)
+        // Reconcile اولیه باعث می‌شود Catalog ذخیره‌شده پس از Update نیز به Backend صحیح منتقل شود.
+        scheduleBackendReconcile(initialDelayMillis = INITIAL_SYNC_DELAY_MS)
 
         // true یعنی Provider با موفقیت آماده شده است.
         return true
     }
 
-    // این تابع Sync را با debounce زمان‌بندی می‌کند تا چند ذخیره متوالی فقط یک موج شبکه ایجاد کنند.
-    private fun scheduleCatalogSync(initialDelayMillis: Long = DEBOUNCE_MS) {
-        // Sync قبلی که هنوز شروع نشده/در حال انتظار است لغو می‌شود.
+    // این تابع چرخه عمر Bot و Sync Catalog را با debounce در یک موج شبکه‌ای هماهنگ می‌کند.
+    private fun scheduleBackendReconcile(initialDelayMillis: Long = DEBOUNCE_MS) {
+        // Job قبلی که هنوز در انتظار است لغو می‌شود تا تغییرات متوالی ادغام شوند.
         pendingSync?.cancel()
 
         // Job جدید روی Dispatcher.IO اجرا می‌شود.
         pendingSync = syncScope.launch {
-            // کمی صبر می‌شود تا ذخیره Products و Categories در یک عملیات UI کامل شود.
+            // کمی صبر می‌شود تا چند SharedPreferences update متوالی کامل شوند.
             delay(initialDelayMillis)
 
             // LocalStore آماده باید در دسترس باشد.
             val store = localStore ?: return@launch
 
-            // همه ربات‌های فعال Telegram که Token معتبر محلی دارند انتخاب می‌شوند.
-            val telegramBots = store.loadBots().filter { bot ->
+            // Snapshot فعلی Botها از حافظه محلی خوانده می‌شود.
+            val currentBots = store.loadBots()
+
+            // Botهایی که حذف شده‌اند یا Token آن‌ها با همان id عوض شده است باید Runtime قبلی‌شان خاموش شود.
+            val retiredBots = knownBots.filter { oldBot ->
+                oldBot.platform == BotPlatform.TELEGRAM &&
+                    oldBot.token.isNotBlank() &&
+                    currentBots.none { current ->
+                        current.id == oldBot.id && current.token == oldBot.token
+                    }
+            }
+
+            // Botهایی که Disconnect آن‌ها شکست بخورد برای Retry در Snapshot نگه داشته می‌شوند.
+            val retryRetiredBots = mutableListOf<ConnectedBot>()
+
+            // برای هر Bot حذف‌شده، deleteWebhook و حذف رکورد Backend اجرا می‌شود.
+            retiredBots.forEach { retiredBot ->
+                TelegramApi.disconnectBot(retiredBot.token)
+                    .onSuccess {
+                        // Token در Log نوشته نمی‌شود؛ فقط Username برای عیب‌یابی کافی است.
+                        Log.i(TAG, "Backend disconnected for removed bot @${retiredBot.username}")
+                    }
+                    .onFailure { error ->
+                        // در شکست شبکه، Bot داخل Snapshot باقی می‌ماند تا تغییر بعدی دوباره تلاش کند.
+                        retryRetiredBots += retiredBot
+                        Log.w(TAG, "Backend disconnect failed for @${retiredBot.username}: ${error.message}")
+                    }
+            }
+
+            // Snapshot به Botهای فعلی به‌علاوه حذف‌های ناموفق تغییر می‌کند تا Retry ممکن بماند.
+            knownBots = currentBots + retryRetiredBots
+
+            // همه ربات‌های فعال Telegram که Token معتبر محلی دارند برای Sync انتخاب می‌شوند.
+            val telegramBots = currentBots.filter { bot ->
                 bot.platform == BotPlatform.TELEGRAM && bot.active && bot.token.isNotBlank()
             }
 
-            // اگر رباتی متصل نیست، هیچ درخواست شبکه‌ای لازم نیست.
+            // اگر Bot فعالی باقی نمانده باشد، مرحله Catalog تمام می‌شود؛ Disconnectهای بالا همچنان انجام شده‌اند.
             if (telegramBots.isEmpty()) return@launch
 
             // کل دسته‌بندی‌ها یک بار از SharedPreferences خوانده می‌شوند.
@@ -86,7 +124,7 @@ class CatalogSyncProvider : ContentProvider() {
             // کل محصولات یک بار از SharedPreferences خوانده می‌شوند.
             val allProducts = store.loadProducts()
 
-            // هر Bot فقط Catalog خودش را دریافت می‌کند؛ داده فروشگاه‌ها دیگر بین Botها مخلوط نمی‌شود.
+            // هر Bot فقط Catalog خودش را دریافت می‌کند؛ داده فروشگاه‌ها بین Botها مخلوط نمی‌شود.
             telegramBots.forEach { bot ->
                 // دسته‌بندی‌های همین Bot بر اساس botId جدا می‌شوند.
                 val botCategories = allCategories.filter { category -> category.botId == bot.id }
@@ -154,10 +192,10 @@ class CatalogSyncProvider : ContentProvider() {
         // کلید دسته‌بندی‌ها همان کلید موجود LocalStore است.
         private const val KEY_CATEGORIES = "categories"
 
-        // debounce کوتاه تغییرات متوالی UI را در یک Sync جمع می‌کند.
+        // debounce کوتاه تغییرات متوالی UI را در یک Reconcile جمع می‌کند.
         private const val DEBOUNCE_MS = 650L
 
-        // Sync اولیه کمی دیرتر اجرا می‌شود تا Activity و داده‌های مهاجرت‌شده فرصت آماده‌شدن داشته باشند.
+        // Reconcile اولیه کمی دیرتر اجرا می‌شود تا Activity و داده‌های مهاجرت‌شده فرصت آماده‌شدن داشته باشند.
         private const val INITIAL_SYNC_DELAY_MS = 1_200L
     }
 }
