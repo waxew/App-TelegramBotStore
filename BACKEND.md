@@ -14,6 +14,7 @@
 8. با `setWebhook` آدرس `botstore-telegram?bot_id=...` روی همان Bot ثبت می‌شود.
 9. از این لحظه Bot حتی با بسته بودن APK نیز Updateهای Telegram را از طریق Supabase Edge Function دریافت می‌کند.
 10. `/start` منوی واقعی فروشگاه را نمایش می‌دهد.
+11. Catalog Android با `botId` همان Bot جدا شده و فقط برای همان Token Sync می‌شود.
 
 ## Edge Functionها
 
@@ -49,14 +50,26 @@
 
 ### `botstore-sync`
 
-وظیفه: انتقال Catalog ساخته‌شده در Android به Bot واقعی.
+وظیفه: انتقال Catalog اختصاصی یک Bot از Android به همان Bot واقعی.
 
 - Token را دوباره با `getMe` بررسی می‌کند.
 - Bot باید قبلاً در `botstore-register` ثبت شده باشد.
-- دسته‌بندی‌ها و محصولات Android را دریافت می‌کند.
+- دسته‌بندی‌ها و محصولات فقط همان `botId` توسط Android ارسال می‌شوند.
 - Catalog فعلی Bot را به‌صورت Replace-All با نسخه جدید همگام می‌کند.
+- داده Botهای دیگر دست‌نخورده می‌ماند.
 
-## همگام‌سازی خودکار Android
+### `botstore-disconnect`
+
+وظیفه: خاموش‌کردن واقعی Bot حذف‌شده.
+
+- ورودی: Token همان Bot
+- lookup فقط با تطبیق دقیق Token در جدول server-only
+- اجرای `deleteWebhook` در Telegram
+- حذف رکورد `botstore_bots`
+- حذف خودکار Category/Product همان Bot به‌واسطه Foreign Keyهای `ON DELETE CASCADE`
+- عملیات idempotent است؛ اگر Bot قبلاً حذف شده باشد نیز موفق پاسخ می‌دهد
+
+## همگام‌سازی و چرخه عمر Android
 
 فایل `CatalogSyncProvider.kt` هنگام شروع Process برنامه فعال می‌شود و تغییر این کلیدهای SharedPreferences را گوش می‌دهد:
 
@@ -64,9 +77,19 @@
 - `products`
 - `categories`
 
-برای جلوگیری از درخواست‌های پشت‌سرهم، تغییرات با Debounce حدود 650 میلی‌ثانیه ترکیب می‌شوند. سپس Catalog فعلی روی تمام Botهای فعال Telegram که Token محلی دارند Sync می‌شود.
+برای جلوگیری از درخواست‌های پشت‌سرهم، تغییرات با Debounce حدود 650 میلی‌ثانیه ترکیب می‌شوند.
 
-ساختار فعلی `LocalStore` Catalog را سراسری نگه می‌دارد؛ به همین دلیل v1.3.1 همان Catalog را روی همه Botهای فعال Sync می‌کند. در نسخه آینده باید محصولات و دسته‌بندی‌ها به `botId` وابسته شوند تا هر فروشگاه Catalog مستقل داشته باشد.
+### Catalog مستقل
+
+`StoreProduct` و `StoreCategory` اکنون `botId` دارند. Provider برای هر Bot فقط آیتم‌هایی را انتخاب می‌کند که `botId` آن‌ها با شناسه همان Bot برابر است و سپس همان زیرمجموعه را به `botstore-sync` می‌فرستد.
+
+داده‌های نسخه‌های قدیمی که `botId` ندارند در شروع Process به Bot اصلی نسبت داده و بلافاصله دوباره ذخیره می‌شوند. این Migration قبل از ثبت Listener انجام می‌شود تا حذف Bot اول باعث انتقال ناخواسته Catalog legacy به Bot دیگری نشود.
+
+### حذف Bot
+
+Provider یک Snapshot از Botهای قبلی نگه می‌دارد. اگر Bot از `connected_bots_v12` حذف شود یا Token همان id تغییر کند، Provider `TelegramApi.disconnectBot()` را اجرا می‌کند. در نتیجه حذف داخل APK فقط ظاهری نیست و Runtime سرور نیز خاموش می‌شود.
+
+اگر Disconnect در همان Process به علت شبکه شکست بخورد، Bot قدیمی در Snapshot Retry نگه داشته می‌شود تا تغییر بعدی دوباره تلاش کند.
 
 ## دیتابیس
 
@@ -88,11 +111,11 @@ RLS روی هر سه جدول فعال است. نقش‌های `anon` و `authen
 - Webhook هر Bot Secret تصادفی مستقل دارد.
 - Token در Logcat چاپ نمی‌شود.
 - Endpoint Webhook درخواست بدون Telegram Secret صحیح را نادیده می‌گیرد.
-- Endpointهای register/sync در MVP از خود Bot Token به‌عنوان اثبات کنترل Bot استفاده می‌کنند.
+- Endpointهای register/sync/disconnect در MVP از خود Bot Token به‌عنوان اثبات کنترل Bot استفاده می‌کنند.
 
 ### بدهی فنی امنیتی
 
-در MVP، Bot Token در جدول server-only ذخیره می‌شود تا Webhook بتواند Telegram Bot API را صدا بزند. قبل از انتشار بزرگ و چندمستاجری باید Tokenها با یک لایه Encryption/Vault سمت سرور نگهداری شوند و `register/sync` نیز به حساب واقعی App BotStore و شناسه مالک Bot متصل شوند.
+در MVP، Bot Token در جدول server-only ذخیره می‌شود تا Webhook بتواند Telegram Bot API را صدا بزند. قبل از انتشار بزرگ و چندمستاجری باید Tokenها با یک لایه Encryption/Vault سمت سرور نگهداری شوند و عملیات register/sync/disconnect نیز به حساب واقعی App BotStore و شناسه مالک Bot متصل شوند.
 
 ## وضعیت فعلی v1.3.1
 
@@ -104,12 +127,14 @@ RLS روی هر سه جدول فعال است. نقش‌های `anon` و `authen
 - اجرای واقعی `/start`
 - منوی اصلی فروشگاه
 - خواندن دسته‌بندی‌ها و محصولات
+- Catalog مستقل برای هر Bot
 - Sync خودکار Catalog از Android
 - اجرای چند Bot روی یک Webhook مشترک
+- تشخیص حذف Bot و `deleteWebhook`
+- حذف cascade داده Backend همان Bot
 
 مرحله بعد:
 
-- Catalog مستقل برای هر Bot
 - سفارش و سبد خرید
 - کیف پول و تراکنش
 - پنل کاربران فروشگاه
@@ -120,4 +145,5 @@ RLS روی هر سه جدول فعال است. نقش‌های `anon` و `authen
 - کد تخفیف
 - پرداخت
 - پشتیبانی اختصاصی فروشنده
+- Encryption/Vault Tokenها
 - اشتراک/Trial هفت‌روزه شبیه مدل Babba
