@@ -1,0 +1,119 @@
+# این Workflow فقط یک بار مدل و UI موجودی v1.5 را به Android اضافه می‌کند و پس از موفقیت حذف می‌شود.
+name: One-time add inventory Android
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/one-time-add-inventory-android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch product model persistence sync and UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # مدل StoreProduct و SharedPreferences به صورت backward-compatible توسعه داده می‌شوند.
+          local = Path('app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt')
+          text = local.read_text(encoding='utf-8')
+
+          model_old = '''    val description: String = "",\n    val active: Boolean = true,\n    val botId: String = ""\n)'''
+          model_new = '''    val description: String = "",\n    val active: Boolean = true,\n    // وقتی false باشد Product مانند نسخه‌های قبلی موجودی نامحدود دارد.\n    val stockEnabled: Boolean = false,\n    // تعداد موجودی فقط وقتی stockEnabled=true مصرف می‌شود و همیشه نامنفی نگه داشته می‌شود.\n    val stockQuantity: Int = 0,\n    val botId: String = ""\n)'''
+          if model_old not in text:
+              raise SystemExit('StoreProduct model anchor not found')
+          text = text.replace(model_old, model_new, 1)
+
+          load_old = '''                            description = item.optString("description"),\n                            active = item.optBoolean("active", true),\n                            // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.\n'''
+          load_new = '''                            description = item.optString("description"),\n                            active = item.optBoolean("active", true),\n                            // Productهای نسخه‌های قبلی که فیلد Stock ندارند نامحدود باقی می‌مانند.\n                            stockEnabled = item.optBoolean("stockEnabled", false),\n                            stockQuantity = item.optInt("stockQuantity", 0).coerceAtLeast(0),\n                            // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.\n'''
+          if load_old not in text:
+              raise SystemExit('loadProducts anchor not found')
+          text = text.replace(load_old, load_new, 1)
+
+          save_old = '''                    put("description", item.description)\n                    put("active", item.active)\n                    put("botId", item.botId)\n'''
+          save_new = '''                    put("description", item.description)\n                    put("active", item.active)\n                    // تنظیم موجودی برای Sync نسخه 1.5 در همان کلید قدیمی products ذخیره می‌شود تا مهاجرت ساده بماند.\n                    put("stockEnabled", item.stockEnabled)\n                    put("stockQuantity", item.stockQuantity.coerceAtLeast(0))\n                    put("botId", item.botId)\n'''
+          if save_old not in text:
+              raise SystemExit('saveProducts anchor not found')
+          local.write_text(text.replace(save_old, save_new, 1), encoding='utf-8')
+
+          # Sync Android دو فیلد Stock را همراه UUID پایدار Product به Backend می‌فرستد.
+          api = Path('app/src/main/java/ir/asteam/telegrambotstore/TelegramApi.kt')
+          text = api.read_text(encoding='utf-8')
+          sync_old = '''                            .put("description", product.description)\n                            .put("active", product.active)\n'''
+          sync_new = '''                            .put("description", product.description)\n                            .put("active", product.active)\n                            .put("stock_enabled", product.stockEnabled)\n                            .put("stock_quantity", product.stockQuantity.coerceAtLeast(0))\n'''
+          if sync_old not in text:
+              raise SystemExit('TelegramApi stock sync anchor not found')
+          api.write_text(text.replace(sync_old, sync_new, 1), encoding='utf-8')
+
+          # صفحه Product قابلیت نمایش، ایجاد و ویرایش موجودی را اضافه می‌کند.
+          screens = Path('app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt')
+          text = screens.read_text(encoding='utf-8')
+
+          state_old = '''    // Dialog افزودن محصول کنترل می‌شود.\n    var add by remember { mutableStateOf(false) }\n'''
+          state_new = '''    // Dialog افزودن محصول کنترل می‌شود.\n    var add by remember { mutableStateOf(false) }\n    // Product انتخاب‌شده برای ویرایش قیمت، دسته و موجودی نگهداری می‌شود.\n    var editingProduct by remember { mutableStateOf<StoreProduct?>(null) }\n'''
+          if state_old not in text:
+              raise SystemExit('Products state anchor not found')
+          text = text.replace(state_old, state_new, 1)
+
+          display_old = '''                                if (product.category.isNotBlank()) {\n                                    Text(product.category, color = TextMuted, fontSize = 9.sp)\n                                }\n                            }\n                            // لینک پایدار Product با UUID محلی ساخته و از Share Sheet سیستم ارسال می‌شود.\n'''
+          display_new = '''                                if (product.category.isNotBlank()) {\n                                    Text(product.category, color = TextMuted, fontSize = 9.sp)\n                                }\n                                // وضعیت موجودی روی کارت Product بدون ورود به Dialog قابل مشاهده است.\n                                Text(\n                                    if (!product.stockEnabled) "موجودی: نامحدود"\n                                    else if (product.stockQuantity <= 0) "ناموجود"\n                                    else "موجودی: ${product.stockQuantity.toPersian()}",\n                                    color = if (product.stockEnabled && product.stockQuantity <= 0) Danger else TextMuted,\n                                    fontSize = 9.sp\n                                )\n                            }\n                            // ویرایش Product موجود شناسه پایدار آن را حفظ می‌کند.\n                            IconButton(onClick = { editingProduct = product }) {\n                                Icon(Icons.Outlined.Edit, "ویرایش محصول", tint = Blue)\n                            }\n                            // لینک پایدار Product با UUID محلی ساخته و از Share Sheet سیستم ارسال می‌شود.\n'''
+          if display_old not in text:
+              raise SystemExit('Product card anchor not found')
+          text = text.replace(display_old, display_new, 1)
+
+          add_state_old = '''        var title by remember { mutableStateOf("") }\n        var price by remember { mutableStateOf("") }\n        var category by remember { mutableStateOf(visibleCategories.firstOrNull()?.title ?: "") }\n'''
+          add_state_new = '''        var title by remember { mutableStateOf("") }\n        var price by remember { mutableStateOf("") }\n        var category by remember { mutableStateOf(visibleCategories.firstOrNull()?.title ?: "") }\n        // موجودی برای Product جدید اختیاری است؛ خاموش بودن یعنی نامحدود مانند نسخه‌های قبلی.\n        var stockEnabled by remember { mutableStateOf(false) }\n        var stockQuantity by remember { mutableStateOf("0") }\n'''
+          if add_state_old not in text:
+              raise SystemExit('Add product state anchor not found')
+          text = text.replace(add_state_old, add_state_new, 1)
+
+          add_fields_old = '''                    OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)\n                }\n'''
+          add_fields_new = '''                    OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)\n                    // Switch مشخص می‌کند موجودی این Product محدود است یا نامحدود.\n                    Row(verticalAlignment = Alignment.CenterVertically) {\n                        Column(Modifier.weight(1f)) {\n                            Text("ردیابی موجودی", fontWeight = FontWeight.Bold)\n                            Text(if (stockEnabled) "فروش بیشتر از موجودی جلوگیری می‌شود" else "موجودی نامحدود", color = TextMuted, fontSize = 9.sp)\n                        }\n                        Switch(stockEnabled, { stockEnabled = it })\n                    }\n                    if (stockEnabled) {\n                        OutlinedTextField(\n                            stockQuantity,\n                            { stockQuantity = it.filter(Char::isDigit) },\n                            label = { Text("تعداد موجودی") },\n                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),\n                            singleLine = true\n                        )\n                    }\n                }\n'''
+          # فقط اولین occurrence بعد از بخش Add Product باید تغییر کند؛ متن anchor قبل از Category dialog نیز تکرار نمی‌شود چون آن Dialog ساختار دیگری دارد.
+          if add_fields_old not in text:
+              raise SystemExit('Add product fields anchor not found')
+          text = text.replace(add_fields_old, add_fields_new, 1)
+
+          add_product_old = '''                            price = price.toLongOrNull() ?: 0,\n                            category = category.trim(),\n                            botId = ownerBotId\n'''
+          add_product_new = '''                            price = price.toLongOrNull() ?: 0,\n                            category = category.trim(),\n                            stockEnabled = stockEnabled,\n                            stockQuantity = if (stockEnabled) stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0,\n                            botId = ownerBotId\n'''
+          if add_product_old not in text:
+              raise SystemExit('New StoreProduct anchor not found')
+          text = text.replace(add_product_old, add_product_new, 1)
+
+          add_enabled_old = '''                    enabled = title.isNotBlank() && price.toLongOrNull() != null\n'''
+          add_enabled_new = '''                    enabled = title.isNotBlank() && price.toLongOrNull() != null &&\n                        (!stockEnabled || stockQuantity.toIntOrNull() != null)\n'''
+          if add_enabled_old not in text:
+              raise SystemExit('Add button enabled anchor not found')
+          text = text.replace(add_enabled_old, add_enabled_new, 1)
+
+          tail_old = '''            dismissButton = { TextButton(onClick = { add = false }) { Text("انصراف") } }\n        )\n    }\n}\n\n// مدیریت دسته‌بندی‌ها فقط برای Bot فعال انجام می‌شود.\n'''
+          tail_new = '''            dismissButton = { TextButton(onClick = { add = false }) { Text("انصراف") } }\n        )\n    }\n\n    // Dialog ویرایش Product همان UUID را نگه می‌دارد تا Cart و Deep Link آن بعد از تغییر نشکنند.\n    editingProduct?.let { product ->\n        var editTitle by remember(product.id) { mutableStateOf(product.title) }\n        var editPrice by remember(product.id) { mutableStateOf(product.price.toString()) }\n        var editCategory by remember(product.id) { mutableStateOf(product.category) }\n        var editStockEnabled by remember(product.id) { mutableStateOf(product.stockEnabled) }\n        var editStockQuantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }\n\n        AlertDialog(\n            onDismissRequest = { editingProduct = null },\n            title = { Text("ویرایش محصول") },\n            text = {\n                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {\n                    OutlinedTextField(editTitle, { editTitle = it }, label = { Text("نام محصول") }, singleLine = true)\n                    OutlinedTextField(\n                        editPrice,\n                        { editPrice = it.filter(Char::isDigit) },\n                        label = { Text("قیمت (تومان)") },\n                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),\n                        singleLine = true\n                    )\n                    OutlinedTextField(editCategory, { editCategory = it }, label = { Text("دسته‌بندی") }, singleLine = true)\n                    Row(verticalAlignment = Alignment.CenterVertically) {\n                        Column(Modifier.weight(1f)) {\n                            Text("ردیابی موجودی", fontWeight = FontWeight.Bold)\n                            Text(if (editStockEnabled) "Checkout موجودی را کنترل و کم می‌کند" else "موجودی نامحدود", color = TextMuted, fontSize = 9.sp)\n                        }\n                        Switch(editStockEnabled, { editStockEnabled = it })\n                    }\n                    if (editStockEnabled) {\n                        OutlinedTextField(\n                            editStockQuantity,\n                            { editStockQuantity = it.filter(Char::isDigit) },\n                            label = { Text("تعداد موجودی") },\n                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),\n                            singleLine = true\n                        )\n                    }\n                }\n            },\n            confirmButton = {\n                Button(\n                    onClick = {\n                        val updated = product.copy(\n                            title = editTitle.trim(),\n                            price = editPrice.toLongOrNull() ?: product.price,\n                            category = editCategory.trim(),\n                            stockEnabled = editStockEnabled,\n                            stockQuantity = if (editStockEnabled) editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0\n                        )\n                        saveVisibleProducts(visibleProducts.map { old -> if (old.id == product.id) updated else old })\n                        editingProduct = null\n                    },\n                    enabled = editTitle.isNotBlank() && editPrice.toLongOrNull() != null &&\n                        (!editStockEnabled || editStockQuantity.toIntOrNull() != null)\n                ) { Text("ذخیره تغییرات") }\n            },\n            dismissButton = { TextButton(onClick = { editingProduct = null }) { Text("انصراف") } }\n        )\n    }\n}\n\n// مدیریت دسته‌بندی‌ها فقط برای Bot فعال انجام می‌شود.\n'''
+          if tail_old not in text:
+              raise SystemExit('V12Products tail anchor not found')
+          screens.write_text(text.replace(tail_old, tail_new, 1), encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt app/src/main/java/ir/asteam/telegrambotstore/TelegramApi.kt app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt
+
+      - name: Commit inventory patch
+        shell: bash
+        run: |
+          git config user.name 'AS Team BotStore CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt
+          git add app/src/main/java/ir/asteam/telegrambotstore/TelegramApi.kt
+          git add app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt
+          git commit -m 'Add stock tracking and product editing to Android'
+          git push origin HEAD:main
