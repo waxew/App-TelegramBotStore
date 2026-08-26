@@ -1,62 +1,53 @@
-# این Workflow در هر push به main فایل‌های APK نسخه فعلی را می‌سازد.
-name: Build Android APK
+# این Workflow در هر push به main نسخه Release و بسته سورس پروژه را می‌سازد.
+name: Build Android Release
 
-# رویدادهای اجرا تعریف می‌شوند.
+# رویدادهای اجرای Workflow تعریف می‌شوند.
 on:
-  # Push روی شاخه main باعث build می‌شود.
+  # هر Push روی main باعث Build می‌شود.
   push:
-    # فقط شاخه main برای push پایش می‌شود.
     branches: [ main ]
-  # Pull Request به main نیز build را اجرا می‌کند.
+  # Pull Request به main نیز برای کنترل کامپایل Build می‌شود.
   pull_request:
-    # فقط PRهای مقصد main بررسی می‌شوند.
     branches: [ main ]
-  # اجرای دستی Workflow نیز ممکن است.
+  # اجرای دستی از تب Actions نیز ممکن است.
   workflow_dispatch:
 
-# سطح دسترسی Workflow فقط خواندن محتوا است.
+# Workflow فقط به خواندن سورس نیاز دارد.
 permissions:
-  # سورس مخزن فقط خوانده می‌شود.
   contents: read
 
-# Jobهای Workflow تعریف می‌شوند.
+# Job ساخت نسخه Release تعریف می‌شود.
 jobs:
-  # Job ساخت APK تعریف می‌شود.
   build:
-    # Runner لینوکسی Ubuntu استفاده می‌شود.
+    # Runner رسمی Ubuntu استفاده می‌شود.
     runs-on: ubuntu-latest
-    # مراحل Job به ترتیب اجرا می‌شوند.
     steps:
-      # سورس پروژه Checkout می‌شود.
-      - name: Checkout
+      # سورس آخرین Commit دریافت می‌شود.
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      # Java 17 مورد نیاز Android Gradle Plugin نصب می‌شود.
+      # Java 17 مورد نیاز Android Gradle Plugin آماده می‌شود.
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # Android SDK روی runner آماده می‌شود.
+      # Android SDK روی Runner نصب و تنظیم می‌شود.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # Gradle 8.7 آماده می‌شود.
+      # Gradle نسخه سازگار با پروژه آماده می‌شود.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      # APK دیباگ برای تست سریع ساخته می‌شود.
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
-
-      # APK Release بدون امضا برای امضای خارج از مخزن عمومی ساخته می‌شود.
-      - name: Build unsigned release APK
+      # نسخه Release واقعی برنامه کامپایل می‌شود.
+      - name: Build release APK
         run: gradle :app:assembleRelease --stacktrace
 
-      # ابزار رسمی apksigner از Android SDK برای مرحله امضای خصوصی استخراج می‌شود.
+      # apksigner رسمی SDK برای امضای خصوصی خارج از مخزن عمومی استخراج می‌شود.
       - name: Export apksigner tool
         shell: bash
         run: |
@@ -64,22 +55,29 @@ jobs:
           test -n "$APKSIGNER_JAR"
           cp "$APKSIGNER_JAR" "$RUNNER_TEMP/apksigner.jar"
 
-      # APK دیباگ به‌عنوان Artifact ذخیره می‌شود.
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: App-BotStore-v1.2.1-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+      # یک ZIP تمیز از سورس بدون خروجی Build و کلیدهای خصوصی ساخته می‌شود.
+      - name: Package source code
+        shell: bash
+        run: |
+          zip -r "$RUNNER_TEMP/App-BotStore-v1.3.0-source.zip" . \
+            -x '.git/*' '.gradle/*' '.idea/*' '*/build/*' '*.jks' '*.keystore' '*.idsig'
 
-      # APK Release خام و apksigner برای مرحله امضای خصوصی ذخیره می‌شوند.
+      # APK خام Release و apksigner برای مرحله امضای خصوصی ذخیره می‌شوند.
       - name: Upload release signing inputs
         uses: actions/upload-artifact@v4
         with:
-          name: App-BotStore-v1.2.1-release-inputs
+          name: App-BotStore-v1.3.0-release-inputs
           path: |
             app/build/outputs/apk/release/app-release-unsigned.apk
             ${{ runner.temp }}/apksigner.jar
           if-no-files-found: error
           retention-days: 7
+
+      # ZIP سورس برای دانلود و نگهداری روی لپ‌تاپ ذخیره می‌شود.
+      - name: Upload source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-BotStore-v1.3.0-source
+          path: ${{ runner.temp }}/App-BotStore-v1.3.0-source.zip
+          if-no-files-found: error
+          retention-days: 30
