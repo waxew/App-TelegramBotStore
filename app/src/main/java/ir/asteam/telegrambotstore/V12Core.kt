@@ -1,4 +1,4 @@
-// این فایل اجزای مشترک رابط کاربری، رنگ‌ها، صفحات، پلن‌ها و ابزارهای کمکی نسخه ۱.۲.۱ را نگه می‌دارد.
+// این فایل اجزای مشترک رابط کاربری، رنگ‌ها، صفحات، پلن‌ها و ابزارهای کمکی نسخه ۱.۳.۱ را نگه می‌دارد.
 package ir.asteam.telegrambotstore
 
 import androidx.compose.foundation.BorderStroke
@@ -48,15 +48,28 @@ val Warning = Color(0xFFFFB84D)
 // رنگ خطا، حذف و قیمت قبلی است.
 val Danger = Color(0xFFFF5D73)
 
-// این enum تمام صفحات قابل نمایش در نسخه‌ی ۱.۲.۱ را تعریف می‌کند.
+// این enum تمام صفحات قابل نمایش نسخه ۱.۳.۱ را تعریف می‌کند؛ سفارش‌ها و کاربران به Backend واقعی همان Bot متصل‌اند.
 enum class V12Page(val title: String) {
-    DASHBOARD("داشبورد"), SUBSCRIPTIONS("اشتراک ربات‌ها"), CONNECT("اتصال ربات"), BOT_MANAGER("مدیریت ربات"), PRODUCTS("محصولات"), CATEGORIES("دسته‌بندی‌ها"), PREVIEW("پیش‌نمایش ربات"), SETTINGS("تنظیمات"), SYNC("همگام‌سازی ربات‌ها"), ABOUT("درباره ما"), CONTACT("تماس با ما"), APP_INFO("درباره نرم‌افزار")
+    DASHBOARD("داشبورد"),
+    SUBSCRIPTIONS("اشتراک ربات‌ها"),
+    CONNECT("اتصال ربات"),
+    BOT_MANAGER("مدیریت ربات"),
+    PRODUCTS("محصولات"),
+    CATEGORIES("دسته‌بندی‌ها"),
+    ORDERS("سفارش‌ها"),
+    CUSTOMERS("کاربران فروشگاه"),
+    PREVIEW("پیش‌نمایش ربات"),
+    SETTINGS("تنظیمات"),
+    SYNC("همگام‌سازی ربات‌ها"),
+    ABOUT("درباره ما"),
+    CONTACT("تماس با ما"),
+    APP_INFO("درباره نرم‌افزار")
 }
 
 // این data class مشخصات هر پلن اشتراک را نگه می‌دارد.
 data class SubscriptionPlan(val title: String, val days: Int, val price: Long, val oldPrice: Long? = null, val discount: Int? = null, val badge: String? = null)
 
-// این لیست قیمت‌های تاییدشده‌ی نسخه‌ی ۱.۲.۱ را به ترتیب زمانی نگه می‌دارد.
+// این لیست قیمت‌های فعلی نسخه ۱.۳.۱ را به ترتیب زمانی نگه می‌دارد.
 val subscriptionPlans = listOf(
     SubscriptionPlan("هفتگی", 7, 50_000),
     SubscriptionPlan("یک ماهه", 30, 180_000, 200_000, 10),
