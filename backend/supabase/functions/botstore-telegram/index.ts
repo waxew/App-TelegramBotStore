@@ -69,12 +69,13 @@ function orderStatusFa(status: string) {
   return map[status] ?? status
 }
 
-// منوی اصلی فروشگاه برای /start ساخته می‌شود.
-async function sendMainMenu(token: string, chatId: number, botName: string, firstName = '') {
+// منوی اصلی فروشگاه از نام و متن خوش‌آمدگویی اختصاصی همان Bot استفاده می‌کند.
+async function sendMainMenu(token: string, chatId: number, storeName: string, welcomeText: string, firstName = '') {
   const hello = firstName ? `سلام ${firstName} 👋\n` : 'سلام 👋\n'
+  const body = welcomeText || `به فروشگاه «${storeName || 'فروشگاه'}» خوش آمدید.\nاز منوی زیر بخش موردنظر را انتخاب کنید.`
   await telegramCall(token, 'sendMessage', {
     chat_id: chatId,
-    text: `${hello}به فروشگاه «${botName || 'فروشگاه'}» خوش آمدید.\nاز منوی زیر بخش موردنظر را انتخاب کنید.`,
+    text: `${hello}${body}`,
     reply_markup: {
       keyboard: [
         [{ text: '🛍️ محصولات' }, { text: '🛒 سبد خرید' }],
@@ -113,6 +114,25 @@ async function sendProductDetail(supabase: any, token: string, chatId: number, b
       ],
     },
   })
+}
+
+// لینک مستقیم محصول از source_id پایدار Android استفاده می‌کند و سپس همان جزئیات استاندارد Product را نمایش می‌دهد.
+async function sendProductDetailBySourceId(supabase: any, token: string, chatId: number, botId: number, sourceId: string) {
+  const { data: product, error } = await supabase
+    .from('botstore_products')
+    .select('id')
+    .eq('bot_id', botId)
+    .eq('source_id', sourceId)
+    .eq('active', true)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!product) {
+    await telegramCall(token, 'sendMessage', { chat_id: chatId, text: 'این محصول دیگر در دسترس نیست.' })
+    return
+  }
+
+  await sendProductDetail(supabase, token, chatId, botId, Number(product.id))
 }
 
 // سبد خرید کاربر از DB خوانده و با قیمت فعلی محصولات نمایش داده می‌شود.
@@ -284,6 +304,19 @@ Deno.serve(async (req) => {
     const firstName = String(actor.first_name ?? '')
     const username = String(actor.username ?? '')
 
+    // تنظیمات اختصاصی همین فروشگاه یک بار برای Update جاری خوانده می‌شوند.
+    const { data: storeSettings, error: settingsError } = await supabase
+      .from('botstore_settings')
+      .select('store_name, welcome_text, support_text, about_text')
+      .eq('bot_id', botId)
+      .maybeSingle()
+    if (settingsError) throw settingsError
+
+    const storeName = String(storeSettings?.store_name || bot.first_name || 'فروشگاه')
+    const welcomeText = String(storeSettings?.welcome_text || '')
+    const supportText = String(storeSettings?.support_text || '')
+    const aboutText = String(storeSettings?.about_text || '')
+
     // هر تعامل، پروفایل مشتری همان Bot را Upsert می‌کند؛ blocked عمداً در payload نیست تا مقدار مدیریتی حفظ شود.
     const { data: customer, error: customerError } = await supabase
       .from('botstore_customers')
@@ -431,15 +464,15 @@ Deno.serve(async (req) => {
     if (!message) return new Response('ok', { status: 200 })
     const text = (message.text ?? '').trim()
 
-    // Deep-link محصول با /start p_<id> آماده است تا لینک اختصاصی محصول قابل تولید باشد.
-    const productStartMatch = /^\/start\s+p_(\d+)$/.exec(text)
+    // Deep-link پایدار محصول با /start p_<source_id> کاربر را مستقیم به همان Product می‌برد.
+    const productStartMatch = /^\/start\s+p_([A-Za-z0-9_-]{1,60})$/.exec(text)
     if (productStartMatch) {
-      await sendProductDetail(supabase, token, chatId, botId, Number(productStartMatch[1]))
+      await sendProductDetailBySourceId(supabase, token, chatId, botId, productStartMatch[1])
       return new Response('ok', { status: 200 })
     }
 
     if (text === '/start' || text.startsWith('/start ')) {
-      await sendMainMenu(token, chatId, String(bot.first_name ?? ''), firstName)
+      await sendMainMenu(token, chatId, storeName, welcomeText, firstName)
       return new Response('ok', { status: 200 })
     }
 
@@ -475,7 +508,7 @@ Deno.serve(async (req) => {
     if (text === '☎️ پشتیبانی') {
       await telegramCall(token, 'sendMessage', {
         chat_id: chatId,
-        text: '☎️ برای پشتیبانی با مدیر همین فروشگاه در ارتباط باشید.\nاطلاعات تماس اختصاصی در نسخه بعد از پنل فروشنده قابل تنظیم می‌شود.',
+        text: supportText || '☎️ برای پشتیبانی با مدیر همین فروشگاه در ارتباط باشید.',
       })
       return new Response('ok', { status: 200 })
     }
@@ -483,7 +516,7 @@ Deno.serve(async (req) => {
     if (text === 'ℹ️ درباره فروشگاه') {
       await telegramCall(token, 'sendMessage', {
         chat_id: chatId,
-        text: `🤖 ${bot.first_name || 'فروشگاه تلگرامی'}${bot.username ? `\n@${bot.username}` : ''}\nساخته‌شده با App BotStore`,
+        text: aboutText || `🤖 ${storeName}${bot.username ? `\n@${bot.username}` : ''}\nساخته‌شده با App BotStore`,
       })
       return new Response('ok', { status: 200 })
     }
