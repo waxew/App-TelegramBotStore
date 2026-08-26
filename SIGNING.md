@@ -1,17 +1,25 @@
-# Android release signing
+# Android Release Signing
 
-نام برند انتشار: `App-BotStore`
+این فایل فقط اطلاعات عمومی Certificate نسخه پابلیش را نگه می‌دارد. فایل JKS و رمز آن نباید داخل مخزن عمومی GitHub قرار بگیرند.
 
-شناسه نصب Android که برای سازگاری آپدیت ثابت می‌ماند: `ir.asteam.telegrambotstore`
+## کلید پابلیش اصلی
 
-Alias جدید کلید خصوصی: `app-botstore-release`
+- نسخه شروع استفاده: `1.3.0`
+- Alias: `app-botstore-release`
+- الگوریتم کلید: RSA 4096-bit
+- الگوریتم امضا: SHA384withRSA
+- تاریخ ایجاد: 2026-08-26
+- اعتبار Certificate: تا 2054-01-11
+- SHA-256 Certificate Fingerprint:
 
-SHA-256 certificate fingerprint ثابت:
+`27:DC:69:C2:09:4F:43:AA:9E:2D:0C:5C:38:C2:A8:B8:B2:08:55:31:98:A9:AC:67:9B:D1:BB:1C:AE:EC:CA:03`
 
-`01:9E:A1:CC:37:F2:3B:26:3C:AA:4F:5A:D5:08:F0:54:4D:E9:DB:CD:F9:C9:58:AF:3C:72:D0:E7:50:AF:4D:69`
+## قانون مهم بروزرسانی
 
-## چرا خود کلید تغییر نمی‌کند؟
+از نسخه پابلیش `1.3.0` به بعد تمام APKهای Release باید با همین فایل JKS امضا شوند. تغییر یا گم شدن کلید باعث می‌شود Android نسخه جدید را به‌عنوان Update نسخه نصب‌شده قبول نکند.
 
-Android فقط زمانی یک APK جدید را به‌عنوان Update نسخه نصب‌شده قبول می‌کند که `applicationId` و certificate امضا با نسخه قبلی سازگار باشند. بنابراین برای rebrand، Alias کلید از نام قدیمی به `app-botstore-release` تغییر می‌کند، اما material رمزنگاری و certificate همان کلید قبلی باقی می‌ماند.
+در زمان آماده‌سازی نسخه 1.3.0 هیچ GitHub Release عمومی قبلی برای این مخزن وجود نداشت؛ بنابراین این Certificate به‌عنوان کلید پایه اولین انتشار پابلیش تعیین شد.
 
-فایل JKS خصوصی و رمزهای آن نباید در مخزن عمومی GitHub commit شوند.
+## محل نگهداری خصوصی
+
+نسخه تحویلی ZIP سورس شامل پوشه خصوصی `release-signing` و فایل `info.txt` است. آن فایل را خارج از GitHub، در حداقل دو محل امن و جداگانه نگهداری کنید.
