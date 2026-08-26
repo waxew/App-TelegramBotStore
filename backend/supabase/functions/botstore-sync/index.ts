@@ -1,14 +1,20 @@
-// این Edge Function محصولات و دسته‌بندی‌های ساخته‌شده داخل Android را با فروشگاه واقعی همان Bot همگام می‌کند.
-// مالکیت در MVP با Token معتبر BotFather کنترل می‌شود و هیچ Service Key داخل APK قرار نمی‌گیرد.
+// این Edge Function Catalog Android را با شناسه‌های پایدار به همان Bot واقعی همگام می‌کند.
+// برخلاف نسخه replace-all، ویرایش نام/قیمت دیگر PK محصول را عوض نمی‌کند و Cartهای باز مشتری‌ها حفظ می‌شوند.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.95.0'
 
-// مدل ورودی دسته‌بندی فقط فیلدهای لازم برای Catalog را می‌پذیرد.
-type InputCategory = { title?: string; emoji?: string }
-// مدل ورودی محصول فقط داده‌های موردنیاز ربات فروشگاهی را می‌پذیرد.
-type InputProduct = { title?: string; price?: number; category?: string; description?: string }
+type InputCategory = { id?: string; source_id?: string; title?: string; emoji?: string }
+type InputProduct = {
+  id?: string
+  source_id?: string
+  title?: string
+  price?: number
+  category?: string
+  category_source_id?: string
+  description?: string
+  active?: boolean
+}
 
-// پاسخ JSON یکنواخت ساخته می‌شود.
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -16,7 +22,7 @@ function json(body: unknown, status = 200) {
   })
 }
 
-// کلاینت مدیریتی فقط سمت سرور ساخته می‌شود.
+// service_role فقط داخل Edge Runtime خوانده می‌شود و به APK برنمی‌گردد.
 function createAdminClient() {
   const url = Deno.env.get('SUPABASE_URL') ?? ''
   let key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -34,24 +40,21 @@ function createAdminClient() {
 }
 
 Deno.serve(async (req) => {
-  // فقط POST برای Sync قابل قبول است.
   if (req.method !== 'POST') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405)
 
   try {
-    // Token و Catalog از body خوانده می‌شوند.
     const body = await req.json().catch(() => ({})) as {
       token?: string
       categories?: InputCategory[]
       products?: InputProduct[]
     }
-    const token = body.token?.trim() ?? ''
 
-    // فرمت اولیه Token قبل از Telegram API کنترل می‌شود.
+    const token = body.token?.trim() ?? ''
     if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token)) {
       return json({ ok: false, error: 'INVALID_TOKEN_FORMAT', message: 'فرمت توکن صحیح نیست.' }, 400)
     }
 
-    // getMe تضمین می‌کند Token هنوز معتبر است و شناسه Bot برای lookup قابل اعتماد است.
+    // Token هر بار با Telegram getMe اعتبارسنجی می‌شود تا Token قدیمی نتواند Catalog را تغییر دهد.
     const getMeResponse = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
       signal: AbortSignal.timeout(10_000),
     })
@@ -60,88 +63,71 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'INVALID_BOT_TOKEN', message: 'توکن توسط تلگرام تایید نشد.' }, 400)
     }
 
-    // کلاینت سرور ساخته و شناسه Telegram Bot استخراج می‌شود.
     const supabase = createAdminClient()
     const telegramBotId = Number(getMe.result.id)
 
-    // هم شناسه Telegram و هم مقدار Token بررسی می‌شود تا Token قدیمی یا Rotate‌شده نتواند داده را تغییر دهد.
+    // Bot باید دقیقاً با همین Telegram id و Token قبلاً ثبت شده باشد.
     const { data: bot, error: botError } = await supabase
       .from('botstore_bots')
-      .select('id, bot_token')
+      .select('id')
       .eq('telegram_bot_id', telegramBotId)
       .eq('bot_token', token)
       .eq('active', true)
       .maybeSingle()
 
-    // خطای دیتابیس متوقف‌کننده است.
     if (botError) throw botError
-    // Bot باید قبل از Sync از مسیر اتصال ثبت شده باشد.
-    if (!bot) {
-      return json({ ok: false, error: 'BOT_NOT_REGISTERED', message: 'ابتدا ربات را از صفحه اتصال فعال کنید.' }, 404)
-    }
+    if (!bot) return json({ ok: false, error: 'BOT_NOT_REGISTERED', message: 'ابتدا ربات را از صفحه اتصال فعال کنید.' }, 404)
 
-    // ورودی Android پاک‌سازی می‌شود تا عنوان خالی یا قیمت منفی وارد دیتابیس نشود.
+    // Categoryهای ورودی با source_id پایدار نرمال می‌شوند؛ fallback عنوان فقط برای سازگاری Client قدیمی است.
     const categories = (body.categories ?? [])
-      .map((category, index) => ({
-        title: String(category.title ?? '').trim(),
-        emoji: String(category.emoji ?? '🛍️').trim() || '🛍️',
-        position: index,
-      }))
-      .filter((category) => category.title.length > 0)
+      .map((category) => {
+        const title = String(category.title ?? '').trim()
+        const sourceId = String(category.source_id ?? category.id ?? `title:${title}`).trim()
+        return {
+          source_id: sourceId,
+          title,
+          emoji: String(category.emoji ?? '🛍️').trim() || '🛍️',
+        }
+      })
+      .filter((category) => category.source_id.length > 0 && category.title.length > 0)
 
-    // محصولات نیز نرمال و قیمت آن‌ها غیرمنفی می‌شود.
+    // نگاشت عنوان به source_id برای Clientهایی که Product هنوز فقط نام Category را ارسال می‌کند ساخته می‌شود.
+    const categorySourceByTitle = new Map(categories.map((category) => [category.title, category.source_id]))
+
+    // Productها با id محلی پایدار و Category source_id نرمال می‌شوند.
     const products = (body.products ?? [])
-      .map((product, index) => ({
-        title: String(product.title ?? '').trim(),
-        price: Math.max(0, Math.trunc(Number(product.price ?? 0))),
-        category: String(product.category ?? '').trim(),
-        description: String(product.description ?? '').trim(),
-        position: index,
-      }))
-      .filter((product) => product.title.length > 0)
+      .map((product) => {
+        const title = String(product.title ?? '').trim()
+        const sourceId = String(product.source_id ?? product.id ?? `title:${title}`).trim()
+        const categoryTitle = String(product.category ?? '').trim()
+        return {
+          source_id: sourceId,
+          title,
+          price: Math.max(0, Math.trunc(Number(product.price ?? 0))),
+          category_source_id: String(product.category_source_id ?? categorySourceByTitle.get(categoryTitle) ?? '').trim(),
+          description: String(product.description ?? '').trim(),
+          active: product.active !== false,
+        }
+      })
+      .filter((product) => product.source_id.length > 0 && product.title.length > 0)
 
-    // فعلاً Sync به‌صورت replace-all انجام می‌شود تا Android و Bot همیشه دقیقاً یک Catalog داشته باشند.
-    const { error: deleteProductsError } = await supabase.from('botstore_products').delete().eq('bot_id', bot.id)
-    if (deleteProductsError) throw deleteProductsError
-    const { error: deleteCategoriesError } = await supabase.from('botstore_categories').delete().eq('bot_id', bot.id)
-    if (deleteCategoriesError) throw deleteCategoriesError
+    // تمام Upsert/Deleteهای Catalog داخل یک RPC و یک تراکنش PostgreSQL اجرا می‌شوند.
+    const { data: syncRows, error: syncError } = await supabase.rpc('botstore_sync_catalog', {
+      p_bot_id: Number(bot.id),
+      p_categories: categories,
+      p_products: products,
+    })
 
-    // نگاشت عنوان Category به شناسه جدید دیتابیس برای اتصال محصولات ساخته می‌شود.
-    const categoryIdByTitle = new Map<string, number>()
-    if (categories.length) {
-      const { data: insertedCategories, error: categoriesError } = await supabase
-        .from('botstore_categories')
-        .insert(categories.map((category) => ({ bot_id: bot.id, ...category })))
-        .select('id, title')
-      if (categoriesError) throw categoriesError
-      for (const category of insertedCategories ?? []) {
-        categoryIdByTitle.set(String(category.title), Number(category.id))
-      }
-    }
+    if (syncError) throw syncError
+    const result = syncRows?.[0] ?? { categories_synced: categories.length, products_synced: products.length }
 
-    // محصولات به Category متناظر متصل و درج می‌شوند.
-    if (products.length) {
-      const productRows = products.map((product) => ({
-        bot_id: bot.id,
-        category_id: categoryIdByTitle.get(product.category) ?? null,
-        title: product.title,
-        price: product.price,
-        description: product.description,
-        active: true,
-        position: product.position,
-      }))
-      const { error: productsError } = await supabase.from('botstore_products').insert(productRows)
-      if (productsError) throw productsError
-    }
-
-    // تعداد داده‌های Sync‌شده به Android برگردانده می‌شود.
     return json({
       ok: true,
-      categories_synced: categories.length,
-      products_synced: products.length,
+      categories_synced: Number(result.categories_synced ?? categories.length),
+      products_synced: Number(result.products_synced ?? products.length),
+      stable_ids: true,
     })
   } catch (error) {
-    // جزئیات سروری Log و پیام عمومی به Client برگردانده می‌شود.
     console.error('[botstore-sync]', error)
     return json({ ok: false, error: 'INTERNAL_ERROR', message: 'همگام‌سازی فروشگاه ناموفق بود.' }, 500)
   }
