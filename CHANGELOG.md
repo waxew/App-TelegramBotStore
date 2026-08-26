@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## v1.4.0
+
+- افزایش `versionCode` به 16 و `versionName` به `1.4.0` با حفظ `applicationId = ir.asteam.telegrambotstore`
+- تکمیل سبد خرید واقعی Telegram با افزودن، کاهش تعداد، خالی‌کردن سبد و جمع کل
+- افزودن Checkout اتمیک و ثبت سفارش با شماره `BS-...`
+- افزودن جدول‌های مشتری، سبد، سفارش و اقلام سفارش با RLS و دسترسی server-only
+- افزودن Snapshot عنوان/قیمت اقلام سفارش برای حفظ تاریخچه پس از تغییر Catalog
+- افزودن قفل تراکنشی برای جلوگیری از Checkout دوباره و Race Condition یک Cart
+- افزودن «سفارش‌های من» برای مشتری داخل Telegram
+- افزودن صفحه سفارش‌ها در Android و امکان تغییر وضعیت سفارش
+- افزودن صفحه کاربران فروشگاه در Android
+- افزودن Block / Unblock مشتری و اعمال Block در Runtime همان Bot
+- اصلاح انتخاب چند Bot در داشبورد و تغییر واقعی `selectedBotId`
+- افزودن source ID پایدار برای Product و Category
+- تبدیل Sync Catalog از Replace-All به Upsert پایدار با RPC `botstore_sync_catalog`
+- جلوگیری از خراب‌شدن Cartهای باز هنگام ویرایش نام، قیمت یا توضیح Product
+- حذف وابستگی هویت Category به عنوان و استفاده از `source_id` پایدار
+- افزودن صفحه «مدیریت عمومی» برای هر Bot
+- افزودن `botstore_settings` برای نام فروشگاه، متن خوش‌آمدگویی، پشتیبانی و درباره فروشگاه
+- ایجاد خودکار تنظیمات پایه هنگام اولین اتصال Bot بدون بازنویسی تنظیمات اتصال مجدد
+- استفاده Runtime از متن‌های اختصاصی هر فروشگاه
+- افزودن لینک مستقیم پایدار هر Product با `/start p_<source_id>`
+- افزودن Share Sheet لینک مستقیم محصول در Android
+- افزودن API فروشنده `botstore-manage` برای سفارش‌ها، کاربران، وضعیت‌ها و تنظیمات عمومی
+- افزودن صفحه «ارسال همگانی» در Android
+- افزودن Edge Function `botstore-broadcast`
+- افزودن جدول‌های `botstore_broadcasts` و `botstore_broadcast_recipients`
+- Snapshot فقط کاربران Block‌نشده همان Bot هنگام ساخت Broadcast
+- جدا کردن «ایجاد صف» از «شروع ارسال» برای جلوگیری از ارسال ناخواسته
+- پردازش Broadcast در Batchهای کوچک و قابل Resume
+- ثبت وضعیت `pending/sent/failed` برای هر گیرنده و جلوگیری از ارسال دوباره هنگام Resume
+- بررسی مجدد Block کاربر پیش از ارسال هر Batch
+- مدیریت کوتاه Telegram `retry_after` برای Rate Limit
+- نمایش Progress، آمار موفق/ناموفق و تاریخچه Broadcast در Android
+- نسخه‌بندی Migrationها و سورس تمام Functionهای جدید داخل `backend/supabase/`
+- افزودن Workflow اختصاصی `.github/workflows/build-v140.yml`
+- تغییر نام Artifactهای Release و Source به `App-BotStore-v1.4.0-*`
+
 ## v1.3.1
 
 - افزایش `versionCode` به 15 و `versionName` به 1.3.1 با حفظ `applicationId` برای نصب روی نسخه 1.3.0
@@ -21,10 +59,9 @@
 - افزودن Debounce برای جلوگیری از درخواست‌های پشت‌سرهم
 - ایجاد جداول `botstore_bots`، `botstore_categories` و `botstore_products` با RLS و دسترسی server-only
 - ثبت Migration رسمی `create_app_botstore_multibot` در Supabase
-- اضافه شدن سورس Migration و چهار Edge Function به پوشه `backend/supabase/` در GitHub
+- اضافه شدن سورس Migration و Edge Functionها به پوشه `backend/supabase/` در GitHub
 - اضافه شدن `BACKEND.md` برای توضیح معماری، امنیت، جریان اتصال و بدهی‌های فنی Backend
 - بروزرسانی Workflow برای نام Artifactهای v1.3.1
-- اجرای smoke test اولیه کامپایل روی `TelegramApi.kt` و نسخه اولیه `CatalogSyncProvider.kt`
 
 ## v1.3.0
 
