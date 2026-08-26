@@ -1,4 +1,4 @@
-// این فایل تنظیمات ساخت ماژول اصلی Android و وابستگی‌های نسخه ۱.۳.۰ را تعریف می‌کند.
+// این فایل تنظیمات ساخت ماژول اصلی Android و وابستگی‌های نسخه ۱.۳.۱ را تعریف می‌کند.
 plugins {
     // پلاگین استاندارد ساخت اپلیکیشن Android فعال می‌شود.
     id("com.android.application")
@@ -21,10 +21,10 @@ android {
         minSdk = 24
         // targetSdk روی API 35 قرار می‌گیرد.
         targetSdk = 35
-        // versionCode برای نسخه ۱.۳.۰ افزایش داده می‌شود.
-        versionCode = 14
-        // versionName نسخه پابلیش فعلی است.
-        versionName = "1.3.0"
+        // versionCode برای نسخه ۱.۳.۱ افزایش داده می‌شود تا روی ۱.۳.۰ نصب شود.
+        versionCode = 15
+        // versionName نسخه Patch جدید Backend واقعی است.
+        versionName = "1.3.1"
 
         // Runner پیش‌فرض تست‌های Instrumentation تعیین می‌شود.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
