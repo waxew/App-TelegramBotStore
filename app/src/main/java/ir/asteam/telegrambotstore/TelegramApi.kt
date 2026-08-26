@@ -50,6 +50,15 @@ data class BotStoreCustomer(
     val createdAt: String
 )
 
+// تنظیمات عمومی هر فروشگاه مستقل از نام فنی BotFather نگهداری می‌شوند.
+data class BotStoreSettings(
+    val storeName: String,
+    val welcomeText: String,
+    val supportText: String,
+    val aboutText: String,
+    val botUsername: String
+)
+
 // توابع ارتباط با Telegram Bot API و Supabase Edge Functions در این object متمرکز شده‌اند.
 object TelegramApi {
     // آدرس عمومی پروژه Supabase محرمانه نیست؛ کلید مدیریتی فقط داخل Edge Function نگهداری می‌شود.
@@ -64,7 +73,7 @@ object TelegramApi {
     // Endpoint حذف اتصال، Webhook تلگرام و رکورد Backend همان Bot را پاک می‌کند.
     private const val DISCONNECT_ENDPOINT = "$BACKEND_BASE/botstore-disconnect"
 
-    // Endpoint مدیریت فروشنده سفارش‌ها، مشتری‌ها و وضعیت‌ها را فقط برای همان Token برمی‌گرداند.
+    // Endpoint مدیریت فروشنده سفارش‌ها، مشتری‌ها و تنظیمات عمومی را فقط برای همان Token برمی‌گرداند.
     private const val MANAGE_ENDPOINT = "$BACKEND_BASE/botstore-manage"
 
     // نام قدیمی این تابع برای سازگاری UI حفظ شده است، اما حالا اتصال واقعی Backend و setWebhook را انجام می‌دهد.
@@ -153,6 +162,52 @@ object TelegramApi {
                 productsSynced = response.optInt("products_synced")
             )
         }
+    }
+
+    // تنظیمات عمومی همین Bot از Backend خوانده می‌شوند تا صفحه مدیریت عمومی با وضعیت واقعی سرور باز شود.
+    suspend fun fetchStoreSettings(token: String): Result<BotStoreSettings> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = manageRequest(token, "get_settings")
+            val settings = response.getJSONObject("settings")
+            val bot = response.optJSONObject("bot")
+            BotStoreSettings(
+                storeName = settings.optString("store_name"),
+                welcomeText = settings.optString("welcome_text"),
+                supportText = settings.optString("support_text"),
+                aboutText = settings.optString("about_text"),
+                botUsername = bot?.optString("username").orEmpty()
+            )
+        }
+    }
+
+    // متن‌های قابل شخصی‌سازی همان فروشگاه در Backend ذخیره می‌شوند و بلافاصله توسط Webhook مصرف خواهند شد.
+    suspend fun updateStoreSettings(token: String, settings: BotStoreSettings): Result<BotStoreSettings> = withContext(Dispatchers.IO) {
+        runCatching {
+            val extra = JSONObject()
+                .put("store_name", settings.storeName)
+                .put("welcome_text", settings.welcomeText)
+                .put("support_text", settings.supportText)
+                .put("about_text", settings.aboutText)
+
+            val response = manageRequest(token, "set_settings", extra)
+            val saved = response.getJSONObject("settings")
+            BotStoreSettings(
+                storeName = saved.optString("store_name"),
+                welcomeText = saved.optString("welcome_text"),
+                supportText = saved.optString("support_text"),
+                aboutText = saved.optString("about_text"),
+                botUsername = settings.botUsername
+            )
+        }
+    }
+
+    // لینک مستقیم Telegram برای Product با UUID پایدار ساخته می‌شود؛ این لینک با تغییر نام/قیمت Product ثابت می‌ماند.
+    fun productDeepLink(botUsername: String, productSourceId: String): String? {
+        val username = botUsername.trim().removePrefix("@")
+        val sourceId = productSourceId.trim()
+        if (!username.matches(Regex("^[A-Za-z0-9_]{5,32}$"))) return null
+        if (!sourceId.matches(Regex("^[A-Za-z0-9_-]{1,60}$"))) return null
+        return "https://t.me/$username?start=p_$sourceId"
     }
 
     // آمار خلاصه مشتری‌ها و سفارش‌های همان Bot از Backend خوانده می‌شود.
