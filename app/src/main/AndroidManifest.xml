@@ -1,19 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- این فایل Manifest مجوزها، نام، آیکون و Activity اصلی برنامه را تعریف می‌کند. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- این مجوز برای اعتبارسنجی توکن تلگرام و بررسی بروزرسانی لازم است. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- این مجوز برای اعلان‌های اندروید ۱۳ به بالا رزرو شده است. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- تنظیمات کلی Application با برند جدید App BotStore تعریف می‌شود. -->
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_app"
-        android:label="ربات‌ساز AS Team"
+        android:label="App BotStore"
         android:supportsRtl="true"
         android:theme="@style/Theme.TelegramBotStore">
+        <!-- Activity اصلی نسخه ۱.۲.۱ به‌عنوان لانچر تعریف می‌شود. -->
         <activity
             android:name=".V12Activity"
             android:exported="true">
+            <!-- Intent Filter نقطه ورود از لانچر را تعریف می‌کند. -->
             <intent-filter>
+                <!-- اکشن MAIN این Activity را ورودی اصلی اپ می‌کند. -->
                 <action android:name="android.intent.action.MAIN" />
+                <!-- دسته LAUNCHER آیکون برنامه را در منوی اپ‌ها نمایش می‌دهد. -->
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
