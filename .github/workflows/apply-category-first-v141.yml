@@ -1,0 +1,68 @@
+# این Workflow موقت فقط Patch نسخه 1.4.1 را روی شاخه آزمایشی اعمال می‌کند و بعد خودش حذف می‌شود.
+name: Apply category-first v1.4.1 patch
+
+on:
+  push:
+    branches:
+      - category-first-v141
+    paths:
+      - 'ci-temp/category-first-v141.part5'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    steps:
+      # شاخه آزمایشی با تمام تاریخچه لازم Checkout می‌شود.
+      - name: Checkout category-first branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # پنج قطعه موقت دوباره به Patch اصلی تبدیل و قبل از اعمال اعتبارسنجی می‌شوند.
+      - name: Rebuild and apply patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            ci-temp/category-first-v141.part1 \
+            ci-temp/category-first-v141.part2 \
+            ci-temp/category-first-v141.part3 \
+            ci-temp/category-first-v141.part4 \
+            ci-temp/category-first-v141.part5 > /tmp/category-first-v141.patch.gz.b64
+          base64 -d /tmp/category-first-v141.patch.gz.b64 > /tmp/category-first-v141.patch.gz
+          gzip -dc /tmp/category-first-v141.patch.gz > /tmp/category-first-v141.patch
+
+          # Workflow قدیمی نسخه قبل قبل از Patch نگه داشته می‌شود تا نسخه 1.4.1 دقیقاً از همان Build recipe ساخته شود.
+          cp .github/workflows/build-v140.yml /tmp/build-v140.yml
+
+          git apply --check /tmp/category-first-v141.patch
+          git apply /tmp/category-first-v141.patch
+
+          # Patch باینری فایل جدید را حمل نمی‌کند؛ Workflow اختصاصی 1.4.1 از نسخه قبلی بازتولید می‌شود.
+          sed -e 's/v1\.4\.0/v1.4.1/g' -e 's/1\.4\.0/1.4.1/g' /tmp/build-v140.yml > .github/workflows/build-v141.yml
+
+          # قبل از Commit، خطاهای whitespace و ناسازگاری Patch کنترل می‌شوند.
+          git diff --check
+
+      # فایل‌های انتقال Patch و همین Workflow موقت در Commit نهایی باقی نمی‌مانند.
+      - name: Remove temporary transport files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf ci-temp
+          rm -f .github/workflows/apply-category-first-v141.yml
+
+      # تغییرات واقعی برنامه روی همان شاخه آزمایشی Commit و Push می‌شوند.
+      - name: Commit category-first implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'AS Team BotStore CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Make catalog category-first in v1.4.1'
+          git push origin HEAD:category-first-v141
