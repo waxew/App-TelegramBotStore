@@ -10,15 +10,21 @@
 - افزودن پاسخ واقعی `/start` و منوی محصولات، حساب من، پشتیبانی و درباره فروشگاه
 - افزودن نمایش دسته‌بندی‌ها با Inline Keyboard و نمایش محصولات همان دسته
 - افزودن Edge Function `botstore-sync` برای انتقال Catalog از Android به PostgreSQL
-- افزودن `CatalogSyncProvider` داخلی و `exported=false` برای Sync خودکار تغییرات ربات‌ها، محصولات و دسته‌بندی‌ها
-- افزودن Debounce برای جلوگیری از درخواست‌های Sync پشت‌سرهم
+- افزودن `botId` به `StoreProduct` و `StoreCategory` و مستقل شدن Catalog هر Bot
+- افزودن مهاجرت خودکار Catalog قدیمی فاقد `botId` به Bot اصلی و ذخیره دائمی مالکیت قبل از اجرای UI
+- تغییر صفحات محصولات، دسته‌بندی‌ها و پیش‌نمایش برای نمایش/ویرایش فقط داده Bot انتخاب‌شده
+- تغییر `CatalogSyncProvider` تا هر Token فقط محصولات و دسته‌بندی‌های خودش را Sync کند
+- افزودن Edge Function `botstore-disconnect` برای `deleteWebhook` و حذف رکورد Backend Bot
+- تشخیص Bot حذف‌شده در Android و خاموش‌کردن Runtime واقعی آن در Backend
+- افزودن Retry در همان Process برای Disconnect ناموفق بدون ثبت Token در Logcat
+- افزودن `CatalogSyncProvider` داخلی و `exported=false` برای Sync خودکار چرخه ربات و Catalog
+- افزودن Debounce برای جلوگیری از درخواست‌های پشت‌سرهم
 - ایجاد جداول `botstore_bots`، `botstore_categories` و `botstore_products` با RLS و دسترسی server-only
 - ثبت Migration رسمی `create_app_botstore_multibot` در Supabase
-- اضافه شدن سورس Migration و هر سه Edge Function به پوشه `backend/supabase/` در GitHub
+- اضافه شدن سورس Migration و چهار Edge Function به پوشه `backend/supabase/` در GitHub
 - اضافه شدن `BACKEND.md` برای توضیح معماری، امنیت، جریان اتصال و بدهی‌های فنی Backend
 - بروزرسانی Workflow برای نام Artifactهای v1.3.1
-- اجرای smoke test کامپایل روی `TelegramApi.kt` و `CatalogSyncProvider.kt`
-- مشخص شدن محدودیت MVP: Catalog فعلی LocalStore هنوز per-bot نیست و فعلاً روی همه Botهای Telegram فعال یکسان Sync می‌شود
+- اجرای smoke test اولیه کامپایل روی `TelegramApi.kt` و نسخه اولیه `CatalogSyncProvider.kt`
 
 ## v1.3.0
 
