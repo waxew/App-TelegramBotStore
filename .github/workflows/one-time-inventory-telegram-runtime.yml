@@ -1,0 +1,99 @@
+# این Workflow فقط یک بار Runtime سورس Telegram را Inventory-aware می‌کند و سپس حذف می‌شود.
+name: One-time Telegram inventory UX patch
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/one-time-inventory-telegram-runtime.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch Telegram runtime source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('backend/supabase/functions/botstore-telegram/index.ts')
+          text = p.read_text()
+
+          def once(old, new):
+              global text
+              if old not in text:
+                  raise SystemExit(f'anchor not found: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          once(
+              ".select('id, title, price, description, active')",
+              ".select('id, title, price, description, active, stock_enabled, stock_quantity')"
+          )
+
+          once(
+              """  await telegramCall(token, 'sendMessage', {\n    chat_id: chatId,\n    text: `🛍️ ${product.title}\\n\\n${product.description || 'بدون توضیحات'}\\n\\n💳 ${money(Number(product.price))} تومان`,\n    reply_markup: {\n      inline_keyboard: [\n        [{ text: '➕ افزودن به سبد خرید', callback_data: `cart_add:${product.id}` }],\n        [{ text: '🛒 مشاهده سبد خرید', callback_data: 'cart_show' }],\n      ],\n    },\n  })""",
+              """  const stockEnabled = product.stock_enabled === true\n  const stockQuantity = Math.max(0, Number(product.stock_quantity ?? 0))\n  const soldOut = stockEnabled && stockQuantity <= 0\n  const stockText = !stockEnabled\n    ? '📦 موجودی: نامحدود'\n    : soldOut\n      ? '⛔️ ناموجود'\n      : `📦 موجودی: ${money(stockQuantity)}`\n\n  await telegramCall(token, 'sendMessage', {\n    chat_id: chatId,\n    text: `🛍️ ${product.title}\\n\\n${product.description || 'بدون توضیحات'}\\n\\n💳 ${money(Number(product.price))} تومان\\n${stockText}`,\n    reply_markup: {\n      inline_keyboard: soldOut\n        ? [[{ text: '🛒 مشاهده سبد خرید', callback_data: 'cart_show' }]]\n        : [\n            [{ text: '➕ افزودن به سبد خرید', callback_data: `cart_add:${product.id}` }],\n            [{ text: '🛒 مشاهده سبد خرید', callback_data: 'cart_show' }],\n          ],\n    },\n  })"""
+          )
+
+          once(
+              ".select('id, title, price, active')\n    .eq('bot_id', botId)",
+              ".select('id, title, price, active, stock_enabled, stock_quantity')\n    .eq('bot_id', botId)"
+          )
+
+          once(
+              """    lines.push(`${index + 1}) ${product.title} × ${quantity}\\n${money(lineTotal)} تومان`)""",
+              """    const stockWarning = product.stock_enabled === true && Number(product.stock_quantity ?? 0) < quantity\n      ? '\\n⚠️ موجودی فعلی کمتر از تعداد سبد است'\n      : ''\n    lines.push(`${index + 1}) ${product.title} × ${quantity}\\n${money(lineTotal)} تومان${stockWarning}`)"""
+          )
+
+          once(
+              ".select('id, title, price')\n    .eq('bot_id', botId)",
+              ".select('id, title, price, stock_enabled, stock_quantity')\n    .eq('bot_id', botId)"
+          )
+
+          once(
+              """        text: `${product.title} — ${money(Number(product.price))} تومان`,""",
+              """        text: `${product.title} — ${money(Number(product.price))} تومان${product.stock_enabled === true && Number(product.stock_quantity ?? 0) <= 0 ? ' — ناموجود' : ''}`,"""
+          )
+
+          once(
+              ".from('botstore_products').select('id, title, price').eq('bot_id', botId).eq('category_id', categoryId)",
+              ".from('botstore_products').select('id, title, price, stock_enabled, stock_quantity').eq('bot_id', botId).eq('category_id', categoryId)"
+          )
+
+          once(
+              """                text: `${product.title} — ${money(Number(product.price))} تومان`,""",
+              """                text: `${product.title} — ${money(Number(product.price))} تومان${product.stock_enabled === true && Number(product.stock_quantity ?? 0) <= 0 ? ' — ناموجود' : ''}`,"""
+          )
+
+          once(
+              """        if (error || !checkoutRows?.length) {\n          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: 'سبد خرید خالی است یا ثبت سفارش در حال حاضر ممکن نیست.' })\n          return new Response('ok', { status: 200 })\n        }""",
+              """        if (error || !checkoutRows?.length) {\n          const checkoutError = String(error?.message ?? '').toLowerCase()\n          const message = checkoutError.includes('insufficient stock')\n            ? '⚠️ موجودی یک یا چند محصول کمتر از تعداد سبد شماست. لطفاً سبد را اصلاح کنید.'\n            : checkoutError.includes('product not available')\n              ? '⚠️ یکی از محصولات سبد دیگر قابل خرید نیست. لطفاً سبد را بررسی کنید.'\n              : 'سبد خرید خالی است یا ثبت سفارش در حال حاضر ممکن نیست.'\n          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: message })\n          return new Response('ok', { status: 200 })\n        }"""
+          )
+
+          once(
+              """        if (error) {\n          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: 'این محصول در حال حاضر قابل افزودن به سبد نیست.' })\n        } else {""",
+              """        if (error) {\n          const cartError = String(error.message ?? '').toLowerCase()\n          const message = cartError.includes('insufficient stock')\n            ? '⚠️ تعداد درخواستی از موجودی فعلی این محصول بیشتر است.'\n            : 'این محصول در حال حاضر قابل افزودن به سبد نیست.'\n          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: message })\n        } else {"""
+          )
+
+          p.write_text(text)
+          PY
+          git diff --check
+          git diff -- backend/supabase/functions/botstore-telegram/index.ts
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'AS Team BotStore CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add backend/supabase/functions/botstore-telegram/index.ts
+          git commit -m 'Show and enforce inventory in Telegram store runtime'
+          git push origin HEAD:main
