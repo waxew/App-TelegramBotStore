@@ -545,6 +545,7 @@ fun V12BotManager(
     onUpdate: (ConnectedBot) -> Unit,
     onDelete: (ConnectedBot) -> Unit,
     onGeneralManagement: () -> Unit,
+    onBroadcast: () -> Unit,
     onProducts: () -> Unit,
     onCategories: () -> Unit,
     onPreview: () -> Unit
@@ -599,6 +600,7 @@ fun V12BotManager(
         }
 
         item { ActionCard("مدیریت عمومی", "نام فروشگاه، خوش‌آمدگویی، پشتیبانی و درباره", Icons.Outlined.Tune, Blue, onGeneralManagement) }
+        item { ActionCard("ارسال همگانی", "صف امن و قابل ادامه برای کاربران همین Bot", Icons.Outlined.Campaign, Warning, onBroadcast) }
         item { ActionCard("محصولات", "مدیریت محصولات همین فروشگاه", Icons.Outlined.Inventory2, TelegramBlue, onProducts) }
         item { ActionCard("دسته‌بندی‌ها", "ساخت منوی مستقل همین فروشگاه", Icons.Outlined.Category, RubikaPurple, onCategories) }
         item { ActionCard("پیش‌نمایش ربات", "نمای تقریبی منوی همین Bot", Icons.Outlined.Visibility, Success, onPreview) }

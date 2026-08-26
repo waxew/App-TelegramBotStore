@@ -440,6 +440,11 @@ private fun V12Shell(
                     onPage(V12Page.CUSTOMERS)
                     scope.launch { drawer.close() }
                 }
+                // ارسال همگانی فقط به کاربران Block‌نشده Bot انتخاب‌شده انجام می‌شود.
+                DrawerItem(Icons.Outlined.Campaign, "ارسال همگانی", page == V12Page.BROADCAST) {
+                    selectedBot?.let { onPage(V12Page.BROADCAST) } ?: onPage(V12Page.DASHBOARD)
+                    scope.launch { drawer.close() }
+                }
                 // پیش‌نمایش ربات از منوی اصلی در دسترس قرار می‌گیرد.
                 DrawerItem(Icons.Outlined.Visibility, "پیش‌نمایش ربات", page == V12Page.PREVIEW) {
                     onPage(V12Page.PREVIEW)
@@ -614,6 +619,7 @@ private fun V12Shell(
                                 onUpdate = onBotUpdate,
                                 onDelete = onBotDelete,
                                 onGeneralManagement = { onPage(V12Page.GENERAL_MANAGEMENT) },
+                                onBroadcast = { onPage(V12Page.BROADCAST) },
                                 onProducts = { onPage(V12Page.PRODUCTS) },
                                 onCategories = { onPage(V12Page.CATEGORIES) },
                                 onPreview = { onPage(V12Page.PREVIEW) }
@@ -636,6 +642,14 @@ private fun V12Shell(
                     V12Page.ORDERS -> V12Orders(selectedBot)
                     // کاربران همان فروشگاه و وضعیت Block/Unblock مدیریت می‌شوند.
                     V12Page.CUSTOMERS -> V12Customers(selectedBot)
+                    // صف ارسال همگانی قابل Resume فقط برای Bot انتخاب‌شده نمایش داده می‌شود.
+                    V12Page.BROADCAST -> {
+                        selectedBot?.let { V12Broadcast(it) } ?: EmptyState(
+                            "رباتی انتخاب نشده",
+                            "ابتدا از داشبورد یک ربات را انتخاب کنید.",
+                            Icons.Filled.SmartToy
+                        )
+                    }
                     // پیش‌نمایش منوی ربات نمایش داده می‌شود.
                     V12Page.PREVIEW -> V12Preview(selectedBot, categories, products)
                     // تنظیمات حساب و اعلان‌ها نمایش داده می‌شود.

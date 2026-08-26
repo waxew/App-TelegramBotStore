@@ -49,6 +49,7 @@ enum class V12Page(val title: String) {
     PREVIEW("پیش‌نمایش ربات"),
     ORDERS("سفارش‌ها"),
     CUSTOMERS("کاربران فروشگاه"),
+    BROADCAST("ارسال همگانی"),
     SETTINGS("تنظیمات"),
     SYNC("همگام‌سازی ربات‌ها"),
     ABOUT("درباره ما"),
