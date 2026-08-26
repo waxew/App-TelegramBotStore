@@ -41,16 +41,22 @@ class CatalogSyncProvider : ContentProvider() {
         }
     }
 
-    // هنگام ایجاد Process برنامه، Snapshot اولیه، Listener و Sync اولیه آماده می‌شوند.
+    // هنگام ایجاد Process برنامه، Migration مالکیت، Snapshot، Listener و Sync اولیه آماده می‌شوند.
     override fun onCreate(): Boolean {
         // Context برنامه دریافت می‌شود؛ در نبود Context راه‌اندازی Provider ناموفق است.
         val appContext = context?.applicationContext ?: return false
 
         // LocalStore برای خواندن Botها و Catalog ساخته می‌شود.
-        localStore = LocalStore(appContext)
+        val store = LocalStore(appContext)
+        localStore = store
 
         // Snapshot قبل از ثبت Listener خوانده می‌شود تا بعداً Bot حذف‌شده قابل تشخیص باشد.
-        knownBots = localStore?.loadBots().orEmpty()
+        knownBots = store.loadBots()
+
+        // Catalog نسخه‌های قدیمی ممکن است botId نداشته باشد؛ load آن را به Bot اصلی نسبت می‌دهد و save این مالکیت را دائمی می‌کند.
+        // این کار قبل از ثبت Listener انجام می‌شود تا حذف Bot اول باعث انتقال تصادفی داده legacy به Bot دوم نشود.
+        store.saveCategories(store.loadCategories())
+        store.saveProducts(store.loadProducts())
 
         // همان SharedPreferences تاریخی پروژه باز می‌شود تا داده نسخه‌های قبلی نیز حفظ شود.
         preferences = appContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).also { prefs ->
