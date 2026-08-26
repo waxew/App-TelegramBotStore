@@ -1,0 +1,98 @@
+# این Workflow فقط یک بار برای اتصال صفحه مدیریت عمومی و لینک محصول به Navigation اجرا می‌شود.
+name: One-time wire general management
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/one-time-wire-general-management.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch Android navigation and product share
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          core = Path('app/src/main/java/ir/asteam/telegrambotstore/V12Core.kt')
+          core_text = core.read_text(encoding='utf-8')
+          enum_old = '''    BOT_MANAGER("مدیریت ربات"),\n    PRODUCTS("محصولات"),'''
+          enum_new = '''    BOT_MANAGER("مدیریت ربات"),\n    GENERAL_MANAGEMENT("مدیریت عمومی"),\n    PRODUCTS("محصولات"),'''
+          if enum_old not in core_text:
+              raise SystemExit('V12Core enum anchor not found')
+          core.write_text(core_text.replace(enum_old, enum_new, 1), encoding='utf-8')
+
+          activity = Path('app/src/main/java/ir/asteam/telegrambotstore/V12Activity.kt')
+          text = activity.read_text(encoding='utf-8')
+
+          drawer_old = '''                DrawerItem(Icons.Filled.SmartToy, "ربات‌های من", page == V12Page.BOT_MANAGER) {\n                    selectedBot?.let { onPage(V12Page.BOT_MANAGER) } ?: onPage(V12Page.DASHBOARD)\n                    scope.launch { drawer.close() }\n                }\n                // محصولات از منوی اصلی در دسترس قرار می‌گیرد.\n'''
+          drawer_new = '''                DrawerItem(Icons.Filled.SmartToy, "ربات‌های من", page == V12Page.BOT_MANAGER) {\n                    selectedBot?.let { onPage(V12Page.BOT_MANAGER) } ?: onPage(V12Page.DASHBOARD)\n                    scope.launch { drawer.close() }\n                }\n                // مدیریت عمومی نام و متن‌های اختصاصی Bot انتخاب‌شده را از Backend مدیریت می‌کند.\n                DrawerItem(Icons.Outlined.Tune, "مدیریت عمومی", page == V12Page.GENERAL_MANAGEMENT) {\n                    selectedBot?.let { onPage(V12Page.GENERAL_MANAGEMENT) } ?: onPage(V12Page.DASHBOARD)\n                    scope.launch { drawer.close() }\n                }\n                // محصولات از منوی اصلی در دسترس قرار می‌گیرد.\n'''
+          if drawer_old not in text:
+              raise SystemExit('Drawer anchor not found')
+          text = text.replace(drawer_old, drawer_new, 1)
+
+          manager_old = '''                                onUpdate = onBotUpdate,\n                                onDelete = onBotDelete,\n                                onProducts = { onPage(V12Page.PRODUCTS) },'''
+          manager_new = '''                                onUpdate = onBotUpdate,\n                                onDelete = onBotDelete,\n                                onGeneralManagement = { onPage(V12Page.GENERAL_MANAGEMENT) },\n                                onProducts = { onPage(V12Page.PRODUCTS) },'''
+          if manager_old not in text:
+              raise SystemExit('BotManager route anchor not found')
+          text = text.replace(manager_old, manager_new, 1)
+
+          route_old = '''                    // مدیریت محصولات نمایش داده می‌شود.\n                    V12Page.PRODUCTS -> V12Products(products, categories, onProducts)\n'''
+          route_new = '''                    // مدیریت عمومی متن‌ها و نام فروشگاه را مستقیم از Backend همان Bot ویرایش می‌کند.\n                    V12Page.GENERAL_MANAGEMENT -> {\n                        selectedBot?.let { V12GeneralManagement(it) } ?: EmptyState(\n                            "رباتی انتخاب نشده",\n                            "ابتدا از داشبورد یک ربات را انتخاب کنید.",\n                            Icons.Filled.SmartToy\n                        )\n                    }\n                    // مدیریت محصولات نمایش داده می‌شود.\n                    V12Page.PRODUCTS -> V12Products(products, categories, onProducts)\n'''
+          if route_old not in text:
+              raise SystemExit('Route anchor not found')
+          activity.write_text(text.replace(route_old, route_new, 1), encoding='utf-8')
+
+          screens = Path('app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt')
+          s = screens.read_text(encoding='utf-8')
+
+          signature_old = '''    onUpdate: (ConnectedBot) -> Unit,\n    onDelete: (ConnectedBot) -> Unit,\n    onProducts: () -> Unit,'''
+          signature_new = '''    onUpdate: (ConnectedBot) -> Unit,\n    onDelete: (ConnectedBot) -> Unit,\n    onGeneralManagement: () -> Unit,\n    onProducts: () -> Unit,'''
+          if signature_old not in s:
+              raise SystemExit('V12BotManager signature anchor not found')
+          s = s.replace(signature_old, signature_new, 1)
+
+          cards_old = '''        item { ActionCard("محصولات", "مدیریت محصولات همین فروشگاه", Icons.Outlined.Inventory2, TelegramBlue, onProducts) }\n        item { ActionCard("دسته‌بندی‌ها", "ساخت منوی مستقل همین فروشگاه", Icons.Outlined.Category, RubikaPurple, onCategories) }\n'''
+          cards_new = '''        item { ActionCard("مدیریت عمومی", "نام فروشگاه، خوش‌آمدگویی، پشتیبانی و درباره", Icons.Outlined.Tune, Blue, onGeneralManagement) }\n        item { ActionCard("محصولات", "مدیریت محصولات همین فروشگاه", Icons.Outlined.Inventory2, TelegramBlue, onProducts) }\n        item { ActionCard("دسته‌بندی‌ها", "ساخت منوی مستقل همین فروشگاه", Icons.Outlined.Category, RubikaPurple, onCategories) }\n'''
+          if cards_old not in s:
+              raise SystemExit('BotManager cards anchor not found')
+          s = s.replace(cards_old, cards_new, 1)
+
+          owner_old = '''    val ownerBotId = CatalogSelection.botId.ifBlank {\n        remember { LocalStore(context).loadBots().firstOrNull()?.id.orEmpty() }\n    }\n\n    // در نبود Bot، کاربر باید ابتدا یک Bot انتخاب یا متصل کند.\n'''
+          owner_new = '''    val ownerBotId = CatalogSelection.botId.ifBlank {\n        remember { LocalStore(context).loadBots().firstOrNull()?.id.orEmpty() }\n    }\n    // اطلاعات Bot برای ساخت لینک مستقیم t.me هر Product استفاده می‌شود.\n    val ownerBot = remember(ownerBotId) { LocalStore(context).loadBots().firstOrNull { it.id == ownerBotId } }\n\n    // در نبود Bot، کاربر باید ابتدا یک Bot انتخاب یا متصل کند.\n'''
+          if owner_old not in s:
+              raise SystemExit('Products owner anchor not found')
+          s = s.replace(owner_old, owner_new, 1)
+
+          delete_old = '''                            IconButton(onClick = {\n                                saveVisibleProducts(visibleProducts.filterNot { it.id == product.id })\n                            }) {\n                                Icon(Icons.Outlined.Delete, null, tint = Danger)\n                            }\n'''
+          share_new = '''                            // لینک پایدار Product با UUID محلی ساخته و از Share Sheet سیستم ارسال می‌شود.\n                            TelegramApi.productDeepLink(ownerBot?.username.orEmpty(), product.id)?.let { link ->\n                                IconButton(onClick = {\n                                    context.startActivity(\n                                        Intent.createChooser(\n                                            Intent(Intent.ACTION_SEND).apply {\n                                                type = "text/plain"\n                                                putExtra(Intent.EXTRA_TEXT, link)\n                                            },\n                                            "اشتراک لینک محصول"\n                                        )\n                                    )\n                                }) {\n                                    Icon(Icons.Outlined.Share, "اشتراک لینک مستقیم محصول", tint = Success)\n                                }\n                            }\n                            IconButton(onClick = {\n                                saveVisibleProducts(visibleProducts.filterNot { it.id == product.id })\n                            }) {\n                                Icon(Icons.Outlined.Delete, null, tint = Danger)\n                            }\n'''
+          if delete_old not in s:
+              raise SystemExit('Product delete anchor not found')
+          s = s.replace(delete_old, share_new, 1)
+          screens.write_text(s, encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- app/src/main/java/ir/asteam/telegrambotstore/V12Core.kt app/src/main/java/ir/asteam/telegrambotstore/V12Activity.kt app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'AS Team BotStore CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add app/src/main/java/ir/asteam/telegrambotstore/V12Core.kt
+          git add app/src/main/java/ir/asteam/telegrambotstore/V12Activity.kt
+          git add app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt
+          git commit -m 'Wire per-bot general management and product share links'
+          git push origin HEAD:main
