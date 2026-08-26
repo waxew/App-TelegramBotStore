@@ -2,116 +2,152 @@
 
 اپلیکیشن اندروید فارسی AS Team برای ساخت، اتصال و مدیریت ربات‌های فروشگاهی تلگرام در یک پنل واحد.
 
-## نسخه فعلی: 1.3.1
+## نسخه فعلی: 1.4.0
 
-### تغییر اصلی نسخه 1.3.1
+نسخه `1.4.0` هسته فروشگاه‌ساز واقعی را روی Backend چندرباته تثبیت می‌کند. ربات‌های ساخته‌شده فقط داخل APK تعریف نمی‌شوند؛ Runtime آن‌ها روی Supabase فعال است و با بسته بودن برنامه نیز از طریق Telegram Webhook کار می‌کنند.
 
-در نسخه‌های قبلی، وارد کردن BotFather Token فقط با `getMe` اعتبارسنجی می‌شد و خود ربات روی Backend اجرا نمی‌شد. در نسخه 1.3.1 اتصال تلگرام به Backend واقعی چندرباته منتقل شده است:
+## امکانات فعلی
 
-1. Android توکن را به Backend ارسال می‌کند.
-2. Backend توکن را مستقیماً با Telegram Bot API اعتبارسنجی می‌کند.
-3. ربات در دیتابیس ثبت می‌شود.
-4. برای همان ربات `setWebhook` واقعی انجام می‌شود.
-5. از آن لحظه `/start` و منوی فروشگاه از طریق Backend پاسخ داده می‌شوند؛ بسته بودن APK مانع اجرای ربات نیست.
-6. محصولات و دسته‌بندی‌های هر Bot با `botId` مستقل نگهداری و فقط برای همان Token همگام می‌شوند.
-7. حذف اتصال در Android، Runtime همان Bot را با `deleteWebhook` و حذف رکورد Backend خاموش می‌کند.
-
-### امکانات فعلی
+### Android
 
 - Kotlin + Jetpack Compose + Material 3
-- رابط کاملاً RTL و تم تیره گرافیکی
-- Splash / لوگوموشن
-- ورود، ثبت‌نام و حالت مهمان
-- دسترسی داخلی Administrator برای تست
-- داشبورد پلتفرم‌های تلگرام، واتساپ، روبیکا و بله
-- اتصال واقعی BotFather Token به Backend و فعال‌سازی Telegram Webhook
-- اجرای چند Bot تلگرام روی یک Backend مشترک با جداسازی `bot_id` و Secret اختصاصی Webhook
-- منوی واقعی `/start` برای ربات ساخته‌شده
-- منوی محصولات، حساب کاربر، پشتیبانی و درباره فروشگاه
-- نمایش دسته‌بندی‌ها با Inline Keyboard و محصولات هر دسته
-- Catalog مستقل برای هر Bot در Android و Backend
-- مهاجرت خودکار Catalog قدیمی فاقد `botId` به Bot اصلی بدون مخلوط شدن داده فروشگاه‌ها
-- همگام‌سازی خودکار محصولات و دسته‌بندی‌های هر Bot با همان Bot تلگرام
-- حذف واقعی اتصال: تشخیص Bot حذف‌شده، `deleteWebhook` و پاک‌سازی داده Backend
-- مدیریت چند ربات و نمایش تاریخ ایجاد/انقضا
-- پلن اشتراک مستقل در رابط Android برای هر ربات
-- مدیریت محصولات و دسته‌بندی‌های فروشگاه
-- پیش‌نمایش اختصاصی منوی هر Bot
-- تنظیم اعلان‌ها و بررسی بروزرسانی از GitHub Releases
+- رابط RTL و تم تیره
+- Splash، ورود، ثبت‌نام و حالت مهمان
 - منوی همبرگری از سمت راست
-- ناوبری داخلی و Back Stack: دکمه Back ابتدا Drawer را می‌بندد و در صفحات داخلی به صفحه قبلی برمی‌گردد
-- مهاجرت داده‌های نسخه‌های قبلی بدون حذف تنظیمات کاربر
+- Back Stack داخلی و بازگشت صحیح از صفحات
+- مدیریت چند Bot و انتخاب واقعی Bot فعال
+- پلن اشتراک مستقل برای هر Bot
+- مدیریت محصولات و دسته‌بندی‌های مستقل هر Bot
+- پیش‌نمایش منوی Bot
+- صفحه سفارش‌های فروشگاه
+- صفحه کاربران فروشگاه و Block / Unblock
+- صفحه مدیریت عمومی شامل نام فروشگاه، پیام خوش‌آمدگویی، متن پشتیبانی و درباره فروشگاه
+- Share لینک مستقیم پایدار هر محصول
+- صفحه ارسال همگانی با صف قابل Resume، Progress و تاریخچه
+- تنظیم اعلان‌ها و بررسی بروزرسانی
+- حفظ `applicationId` و داده‌های نسخه‌های قبلی برای نصب به‌صورت Update
+
+### Telegram Runtime
+
+- اعتبارسنجی واقعی BotFather Token
+- `setWebhook` واقعی برای هر Bot
+- Secret مستقل Webhook برای هر Bot
+- اجرای چند Bot روی یک Runtime مشترک با جداسازی `bot_id`
+- پاسخ واقعی `/start`
+- منوی محصولات، سبد خرید، سفارش‌های من، حساب، پشتیبانی و درباره فروشگاه
+- دسته‌بندی‌ها و محصولات با Inline Keyboard
+- جزئیات محصول و افزودن به سبد
+- افزایش/کاهش تعداد محصول در سبد
+- محاسبه جمع کل
+- Checkout اتمیک و تولید شماره سفارش `BS-...`
+- نمایش تاریخچه سفارش مشتری
+- جلوگیری از دو Checkout هم‌زمان برای یک Cart
+- Block شدن واقعی کاربر در Runtime همان فروشگاه
+- متن خوش‌آمدگویی، پشتیبانی و درباره اختصاصی هر Bot
+- Deep Link پایدار محصول با `/start p_<source_id>`
+
+### Catalog و داده
+
+- Catalog مستقل برای هر Bot در Android و PostgreSQL
+- `source_id` پایدار برای Product و Category
+- Upsert به‌جای Replace-All؛ تغییر قیمت یا عنوان، شناسه Product را عوض نمی‌کند
+- حفظ Cartهای باز هنگام ویرایش Catalog
+- Sync خودکار Android → Backend
+- مهاجرت Catalog نسخه‌های قدیمی فاقد `botId`
+- حذف واقعی Bot با `deleteWebhook` و پاک‌سازی cascade داده‌های همان Bot
+
+### پنل فروشنده
+
+- مشاهده سفارش‌ها
+- تغییر وضعیت سفارش
+- مشاهده کاربران همان فروشگاه
+- Block / Unblock
+- آمار سفارش/کاربر در Backend
+- تنظیم متن‌های عمومی فروشگاه
+- ساخت لینک مستقیم Product
+- ارسال همگانی فقط به کاربران Block‌نشده همان Bot
+- ساخت Snapshot گیرنده‌ها قبل از ارسال
+- ارسال Batchهای کوچک و قابل ادامه
+- ثبت `sent/failed/pending` برای هر گیرنده
+- امکان ادامه صف پس از خروج از صفحه یا قطع درخواست
+- تایید جداگانه قبل از اولین پیام؛ ساخت صف به‌تنهایی هیچ پیامی نمی‌فرستد
 
 ## Backend
 
-Backend نسخه 1.3.1 روی Supabase Edge Functions و PostgreSQL ساخته شده است. چهار Function اصلی دارد:
+Backend روی Supabase Edge Functions و PostgreSQL اجرا می‌شود. Functionهای اصلی:
 
-- `botstore-register`: اعتبارسنجی Token، ثبت Bot و `setWebhook`
-- `botstore-telegram`: Webhook مشترک چندرباته و اجرای منوی فروشگاه
-- `botstore-sync`: همگام‌سازی Catalog اختصاصی همان Bot
-- `botstore-disconnect`: حذف Webhook و Runtime/داده Backend Bot حذف‌شده
+- `botstore-register`: اعتبارسنجی Token، ثبت Bot، ایجاد تنظیمات پایه و `setWebhook`
+- `botstore-telegram`: Runtime مشترک چندرباته، فروشگاه، Cart، Checkout و Deep Link
+- `botstore-sync`: همگام‌سازی پایدار Catalog
+- `botstore-disconnect`: `deleteWebhook` و حذف Runtime Bot
+- `botstore-manage`: سفارش‌ها، کاربران، Block/Unblock و تنظیمات عمومی
+- `botstore-broadcast`: صف ارسال همگانی قابل Resume
 
-Migration دیتابیس و سورس Functionها داخل پوشه `backend/supabase/` نگهداری می‌شوند تا Backend قابل بازسازی و مهاجرت باشد.
-
-توضیحات کامل معماری در `BACKEND.md` ثبت شده است.
-
-## محدودیت فعلی MVP
-
-Backend 24/7، Catalog مستقل و چرخه اتصال/حذف واقعی شده‌اند، اما پروژه هنوز کپی کامل Babba نیست. امکانات زیر هنوز در مراحل بعدی توسعه قرار دارند:
-
-- سبد خرید و سفارش
-- موجودی
-- پرداخت
-- ارسال همگانی
-- مدیریت کاربران و Block/Unblock
-- لینک مستقیم محصول
-- تنظیمات اختصاصی پیام خوش‌آمدگویی و پشتیبانی
-- Trial واقعی هفت‌روزه و توقف Runtime پس از پایان اشتراک
-- رمزنگاری/Vault حرفه‌ای Tokenها
+Migrationها و سورس Functionها در `backend/supabase/` نسخه‌بندی شده‌اند تا Backend از Repository قابل بازسازی باشد.
 
 ## امنیت Backend
 
-- هیچ `service_role` یا Secret دیتابیس داخل APK قرار نگرفته است.
-- RLS روی جداول BotStore فعال است و `anon`/`authenticated` دسترسی مستقیم ندارند.
-- هر ربات Telegram دارای `webhook_secret` مستقل است.
+- هیچ `service_role` یا Secret دیتابیس داخل APK قرار ندارد.
+- RLS روی جداول BotStore فعال است.
+- نقش‌های `anon` و `authenticated` به جداول server-only دسترسی مستقیم ندارند.
+- RPCهای حساس Broadcast فقط برای `service_role` قابل اجرا هستند.
+- هر Bot دارای `webhook_secret` مستقل است.
+- Webhook فقط Secret معتبر Telegram را پردازش می‌کند.
 - Token در Logcat چاپ نمی‌شود.
-- Endpoint Webhook فقط Update دارای Secret صحیح Telegram را پردازش می‌کند.
-- Register/Sync/Disconnect در MVP از خود Bot Token به‌عنوان اثبات کنترل Bot استفاده می‌کنند.
+- عملیات مدیریتی در MVP با Bot Token ثبت‌شده همان Bot احراز می‌شوند.
 
-در MVP، Bot Token برای اجرای Telegram Bot API در جدول server-only ذخیره می‌شود. پیش از عرضه عمومی در مقیاس بالا باید Tokenها با Encryption/Vault سمت سرور محافظت شوند و عملیات مدیریت Bot نیز به حساب مالک در App BotStore متصل شوند.
+در نسخه MVP، Bot Token برای اجرای Telegram Bot API در جدول server-only نگهداری می‌شود. پیش از عرضه در مقیاس بزرگ، مرحله امنیتی بعدی انتقال Tokenها به Encryption/Vault و اتصال مالکیت Bot به حساب واقعی App BotStore است.
 
 ## وضعیت پلتفرم‌ها
 
-- تلگرام: Backend واقعی، Webhook، Catalog مستقل، Sync و Disconnect فعال است.
-- واتساپ، روبیکا و بله: رابط Android وجود دارد؛ Runtime فروشگاهی آن‌ها هنوز به Backend اختصاصی جدید متصل نشده است.
+- Telegram: Runtime واقعی و قابلیت‌های فروشگاهی فعال است.
+- WhatsApp، Rubika و Bale: رابط Android وجود دارد؛ Runtime فروشگاهی مستقل آن‌ها هنوز پیاده‌سازی نشده است.
+
+## موارد باقی‌مانده برای نسخه‌های بعد
+
+- موجودی و رزرو موجودی
+- پرداخت و درگاه ایرانی
+- Telegram Stars برای سناریوهای مجاز
+- کد تخفیف
+- آدرس و روش ارسال
+- محصول دیجیتال
+- Trial واقعی ۷ روزه و توقف Runtime پس از پایان اشتراک
+- Notification واقعی سفارش برای فروشنده
+- آمار فروش و CRM پیشرفته
+- Encryption/Vault Tokenها
+- Supabase Auth / مالکیت حساب‌محور Bot
+- Mini App فروشگاهی
 
 ## سازگاری بروزرسانی
 
-شناسه نصب Android ثابت نگه داشته شده است:
+شناسه نصب Android ثابت است:
 
 `ir.asteam.telegrambotstore`
 
-`versionCode` نسخه 1.3.1 برابر 15 است تا روی نسخه 1.3.0 نصب شود و SharedPreferences کاربر حفظ شود.
+نسخه `1.4.0` دارای `versionCode = 16` است و برای نصب روی نسخه‌های `1.3.x` طراحی شده است. SharedPreferences و Catalog محلی نسخه‌های قبلی حفظ و در صورت نیاز migrate می‌شوند.
 
-نسخه `1.3.0` اولین نسخه پابلیش با کلید Release دائمی پروژه در نظر گرفته شده است. تمام نسخه‌های بعدی، از جمله 1.3.1، باید با همان Release Key امضا شوند تا به‌صورت Update نصب شوند.
-
-## کامنت‌گذاری سورس
-
-فایل‌های Kotlin، Manifest، Gradle، Backend، Migration و Workflow دست‌نویس دارای توضیحات فارسی هستند. استاندارد الزامی پروژه در `COMMENTING_GUIDE.md` ثبت شده است.
+نسخه `1.3.0` مبنای اولین Release Key دائمی پروژه است. نسخه `1.4.0` و تمام نسخه‌های بعدی باید با همان کلید Release امضا شوند تا Android آن‌ها را به‌عنوان Update معتبر بپذیرد.
 
 ## Build
 
-Workflow موجود در `.github/workflows/build-apk.yml` برای Build نسخه Release با Java 17 و Gradle 8.7 تنظیم شده است و Artifactهای نسخه 1.3.1 را تولید می‌کند.
+- Java 17
+- Gradle 8.7
+- Workflow عمومی: `.github/workflows/build-apk.yml`
+- Workflow قابل تکرار نسخه: `.github/workflows/build-v140.yml`
+- Artifact Release به‌صورت unsigned در GitHub ساخته می‌شود و Signing نهایی خارج از مخزن عمومی با JKS دائمی انجام می‌شود.
+- کلید خصوصی و Password هرگز داخل Repository قرار نمی‌گیرند.
 
-کلید خصوصی Android داخل مخزن عمومی قرار نمی‌گیرد.
+## کامنت‌گذاری سورس
 
-## مستندات تکمیلی
+فایل‌های دست‌نویس Android، Backend، Migration و Workflow دارای توضیحات فارسی هستند. استاندارد پروژه در `COMMENTING_GUIDE.md` ثبت شده است.
 
-- `BACKEND.md`: معماری و جریان Backend واقعی چندرباته
-- `CHANGELOG.md`: تغییرات نسخه‌ها
-- `ROADMAP.md`: توسعه‌های بعدی تا مدل کامل فروشگاه‌ساز
-- `SIMILAR_PROJECTS.md`: پروژه‌های متن‌باز مشابه برای بررسی معماری و قابلیت‌ها
-- `SIGNING.md`: اطلاعات عمومی Certificate انتشار، بدون رمز و کلید خصوصی
+## مستندات
+
+- `BACKEND.md`: معماری Backend
+- `CHANGELOG.md`: تاریخچه تغییرات
+- `ROADMAP.md`: برنامه توسعه
+- `SIMILAR_PROJECTS.md`: نمونه‌های متن‌باز مشابه
+- `SIGNING.md`: اطلاعات عمومی Certificate انتشار بدون کلید خصوصی
 
 ## مخزن
 
