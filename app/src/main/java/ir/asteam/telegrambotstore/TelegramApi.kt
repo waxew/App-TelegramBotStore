@@ -21,6 +21,35 @@ data class TelegramCatalogSyncResult(
     val productsSynced: Int
 )
 
+// آمار خلاصه فروشگاه برای هدر صفحات مدیریتی صاحب Bot استفاده می‌شود.
+data class BotStoreOverview(
+    val customers: Int,
+    val orders: Int,
+    val newOrders: Int
+)
+
+// مدل سفارش Backend برای صفحه مدیریت سفارش‌های فروشنده است.
+data class BotStoreOrder(
+    val id: Long,
+    val orderCode: String,
+    val telegramUserId: Long,
+    val status: String,
+    val totalPrice: Long,
+    val createdAt: String,
+    val customerName: String,
+    val customerUsername: String
+)
+
+// مدل مشتری Backend برای صفحه کاربران فروشگاه است.
+data class BotStoreCustomer(
+    val id: Long,
+    val telegramUserId: Long,
+    val firstName: String,
+    val username: String,
+    val blocked: Boolean,
+    val createdAt: String
+)
+
 // توابع ارتباط با Telegram Bot API و Supabase Edge Functions در این object متمرکز شده‌اند.
 object TelegramApi {
     // آدرس عمومی پروژه Supabase محرمانه نیست؛ کلید مدیریتی فقط داخل Edge Function نگهداری می‌شود.
@@ -35,25 +64,21 @@ object TelegramApi {
     // Endpoint حذف اتصال، Webhook تلگرام و رکورد Backend همان Bot را پاک می‌کند.
     private const val DISCONNECT_ENDPOINT = "$BACKEND_BASE/botstore-disconnect"
 
+    // Endpoint مدیریت فروشنده سفارش‌ها، مشتری‌ها و وضعیت‌ها را فقط برای همان Token برمی‌گرداند.
+    private const val MANAGE_ENDPOINT = "$BACKEND_BASE/botstore-manage"
+
     // نام قدیمی این تابع برای سازگاری UI حفظ شده است، اما حالا اتصال واقعی Backend و setWebhook را انجام می‌دهد.
     suspend fun validateToken(token: String): Result<TelegramBotInfo> = connectBot(token)
 
     // این تابع اتصال واقعی را انجام می‌دهد: Token را به Backend می‌فرستد، getMe سروری انجام می‌شود و Webhook فعال می‌شود.
     suspend fun connectBot(token: String): Result<TelegramBotInfo> = withContext(Dispatchers.IO) {
         runCatching {
-            // فرمت Token قبل از ارسال کنترل می‌شود تا درخواست بیهوده ایجاد نشود.
-            require(token.matches(Regex("^[0-9]{6,12}:[A-Za-z0-9_-]{20,}$"))) { "فرمت توکن صحیح نیست" }
+            requireValidToken(token)
 
             // Payload فقط شامل Token همان Bot است؛ هیچ Service Key یا Secret سرور در APK وجود ندارد.
             val payload = JSONObject().put("token", token)
-
-            // Backend علاوه بر اعتبارسنجی Token، Webhook چندرباته را نیز ثبت می‌کند.
             val response = postJson(REGISTER_ENDPOINT, payload)
-
-            // خطای Backend به پیام قابل فهم برای کاربر تبدیل می‌شود.
-            if (!response.optBoolean("ok")) {
-                error(response.optString("message", "فعال‌سازی Webhook ربات ناموفق بود"))
-            }
+            ensureBackendOk(response, "فعال‌سازی Webhook ربات ناموفق بود")
 
             // اطلاعات تاییدشده Bot از پاسخ Backend خوانده می‌شود.
             val bot = response.getJSONObject("bot")
@@ -68,19 +93,11 @@ object TelegramApi {
     // این تابع اتصال واقعی Bot را از Backend حذف می‌کند تا حذف داخل APK، Bot را روی سرور فعال باقی نگذارد.
     suspend fun disconnectBot(token: String): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
-            // Token خالی یا فرمت نامعتبر به Backend فرستاده نمی‌شود.
-            require(token.matches(Regex("^[0-9]{6,12}:[A-Za-z0-9_-]{20,}$"))) { "فرمت توکن صحیح نیست" }
+            requireValidToken(token)
 
-            // Token همان Bot برای اثبات کنترل و lookup رکورد server-only ارسال می‌شود.
             val payload = JSONObject().put("token", token)
-
-            // Endpoint ابتدا deleteWebhook و سپس حذف رکورد Backend را انجام می‌دهد.
             val response = postJson(DISCONNECT_ENDPOINT, payload)
-
-            // خطای Backend به Result شکست تبدیل می‌شود تا Provider بتواند آن را Log کند.
-            if (!response.optBoolean("ok")) {
-                error(response.optString("message", "حذف اتصال ربات از Backend ناموفق بود"))
-            }
+            ensureBackendOk(response, "حذف اتصال ربات از Backend ناموفق بود")
 
             // disconnected=true یعنی رکورد فعلی حذف شد؛ already_removed نیز عملیات موفق محسوب می‌شود.
             response.optBoolean("disconnected") || response.optBoolean("already_removed")
@@ -94,8 +111,7 @@ object TelegramApi {
         products: List<StoreProduct>
     ): Result<TelegramCatalogSyncResult> = withContext(Dispatchers.IO) {
         runCatching {
-            // Token خالی هرگز به Backend ارسال نمی‌شود.
-            require(token.isNotBlank()) { "توکن ربات ثبت نشده است" }
+            requireValidToken(token)
 
             // دسته‌بندی‌های Android به آرایه JSON تبدیل می‌شوند.
             val categoryArray = JSONArray().apply {
@@ -121,21 +137,14 @@ object TelegramApi {
                 }
             }
 
-            // Token برای اثبات مالکیت Bot و Catalog برای جایگزینی وضعیت سرور ارسال می‌شوند.
             val payload = JSONObject()
                 .put("token", token)
                 .put("categories", categoryArray)
                 .put("products", productArray)
 
-            // Endpoint همگام‌سازی فراخوانی می‌شود.
             val response = postJson(SYNC_ENDPOINT, payload)
+            ensureBackendOk(response, "همگام‌سازی فروشگاه ناموفق بود")
 
-            // در صورت خطا، متن Backend به UI قابل انتقال است.
-            if (!response.optBoolean("ok")) {
-                error(response.optString("message", "همگام‌سازی فروشگاه ناموفق بود"))
-            }
-
-            // تعداد آیتم‌های ثبت‌شده برای گزارش و تست برگردانده می‌شود.
             TelegramCatalogSyncResult(
                 categoriesSynced = response.optInt("categories_synced"),
                 productsSynced = response.optInt("products_synced")
@@ -143,52 +152,155 @@ object TelegramApi {
         }
     }
 
+    // آمار خلاصه مشتری‌ها و سفارش‌های همان Bot از Backend خوانده می‌شود.
+    suspend fun fetchOverview(token: String): Result<BotStoreOverview> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = manageRequest(token, "overview")
+            val overview = response.getJSONObject("overview")
+            BotStoreOverview(
+                customers = overview.optInt("customers"),
+                orders = overview.optInt("orders"),
+                newOrders = overview.optInt("new_orders")
+            )
+        }
+    }
+
+    // آخرین سفارش‌های همان Bot برای پنل فروشنده دریافت می‌شوند.
+    suspend fun fetchOrders(token: String, limit: Int = 50): Result<List<BotStoreOrder>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = manageRequest(token, "orders", JSONObject().put("limit", limit.coerceIn(1, 100)))
+            val array = response.optJSONArray("orders") ?: JSONArray()
+
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    val customer = item.optJSONObject("customer")
+                    add(
+                        BotStoreOrder(
+                            id = item.getLong("id"),
+                            orderCode = item.optString("order_code"),
+                            telegramUserId = item.optLong("telegram_user_id"),
+                            status = item.optString("status", "new"),
+                            totalPrice = item.optLong("total_price"),
+                            createdAt = item.optString("created_at"),
+                            customerName = customer?.optString("first_name").orEmpty(),
+                            customerUsername = customer?.optString("username").orEmpty()
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    // مشتری‌های همان فروشگاه برای CRM اولیه دریافت می‌شوند.
+    suspend fun fetchCustomers(token: String, limit: Int = 100): Result<List<BotStoreCustomer>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = manageRequest(token, "customers", JSONObject().put("limit", limit.coerceIn(1, 100)))
+            val array = response.optJSONArray("customers") ?: JSONArray()
+
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    add(
+                        BotStoreCustomer(
+                            id = item.getLong("id"),
+                            telegramUserId = item.optLong("telegram_user_id"),
+                            firstName = item.optString("first_name"),
+                            username = item.optString("username"),
+                            blocked = item.optBoolean("blocked"),
+                            createdAt = item.optString("created_at")
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    // وضعیت یک سفارش فقط از allow-list Backend و برای همان Bot تغییر می‌کند.
+    suspend fun setOrderStatus(token: String, orderId: Long, status: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            val extra = JSONObject()
+                .put("order_id", orderId)
+                .put("status", status)
+            val response = manageRequest(token, "set_order_status", extra)
+            response.optJSONObject("order") != null
+        }
+    }
+
+    // Block یا Unblock یک مشتری فقط در همان فروشگاه اعمال می‌شود.
+    suspend fun setCustomerBlocked(token: String, customerId: Long, blocked: Boolean): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            val extra = JSONObject()
+                .put("customer_id", customerId)
+                .put("blocked", blocked)
+            val response = manageRequest(token, "set_customer_blocked", extra)
+            response.optJSONObject("customer") != null
+        }
+    }
+
+    // درخواست مدیریتی مشترک Token و action را همراه فیلدهای اضافه به Endpoint فروشنده ارسال می‌کند.
+    private fun manageRequest(token: String, action: String, extra: JSONObject? = null): JSONObject {
+        requireValidToken(token)
+
+        val payload = JSONObject()
+            .put("token", token)
+            .put("action", action)
+
+        // فیلدهای اضافی بدون بازنویسی Token/action به Payload منتقل می‌شوند.
+        if (extra != null) {
+            val keys = extra.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key != "token" && key != "action") payload.put(key, extra.get(key))
+            }
+        }
+
+        val response = postJson(MANAGE_ENDPOINT, payload)
+        ensureBackendOk(response, "مدیریت فروشگاه ناموفق بود")
+        return response
+    }
+
+    // فرمت Token پیش از هر درخواست Backend بررسی می‌شود.
+    private fun requireValidToken(token: String) {
+        require(token.matches(Regex("^[0-9]{6,12}:[A-Za-z0-9_-]{20,}$"))) { "فرمت توکن صحیح نیست" }
+    }
+
+    // خطای JSON استاندارد Backend به Exception قابل مدیریت در Result تبدیل می‌شود.
+    private fun ensureBackendOk(response: JSONObject, fallback: String) {
+        if (!response.optBoolean("ok")) {
+            error(response.optString("message", fallback))
+        }
+    }
+
     // درخواست POST JSON برای Endpointهای Backend با timeout و مدیریت خطای مشترک اجرا می‌شود.
     private fun postJson(url: String, payload: JSONObject): JSONObject {
-        // اتصال HTTP ساخته می‌شود.
         val connection = URL(url).openConnection() as HttpURLConnection
-        // متد POST مشخص می‌شود.
         connection.requestMethod = "POST"
-        // ارسال body فعال می‌شود.
         connection.doOutput = true
-        // نوع محتوای درخواست JSON است.
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-        // پاسخ JSON درخواست می‌شود.
         connection.setRequestProperty("Accept", "application/json")
-        // timeout اتصال تنظیم می‌شود.
         connection.connectTimeout = 12_000
-        // timeout خواندن تنظیم می‌شود.
         connection.readTimeout = 12_000
 
         return try {
-            // Payload با UTF-8 داخل body نوشته می‌شود.
             connection.outputStream.use { stream ->
                 stream.write(payload.toString().toByteArray(Charsets.UTF_8))
             }
 
-            // status code دریافت می‌شود.
             val status = connection.responseCode
-            // بر اساس status، stream درست خوانده می‌شود.
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()
                 ?.use { it.readText() }
                 .orEmpty()
 
-            // در نبود JSON قابل پردازش، خطای مناسب ساخته می‌شود.
             if (text.isBlank()) error("پاسخ خالی از Backend دریافت شد")
 
-            // JSON Backend حتی در status خطا خوانده می‌شود تا پیام دقیق به کاربر برسد.
             val json = JSONObject(text)
-
-            // اگر status HTTP ناموفق و Backend پیام مشخص ندارد، status در خطا قرار می‌گیرد.
-            if (status !in 200..299 && !json.has("message")) {
+            if (status !in 200..299 && !json.has("message") && !json.has("error")) {
                 error("خطای Backend با کد $status")
             }
-
-            // پاسخ parsed برگردانده می‌شود.
             json
         } finally {
-            // اتصال همیشه آزاد می‌شود.
             connection.disconnect()
         }
     }
