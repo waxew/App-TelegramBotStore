@@ -1,168 +1,62 @@
+// این فایل اجزای مشترک رابط کاربری، رنگ‌ها، صفحات، پلن‌ها و ابزارهای کمکی نسخه ۱.۲.۱ را نگه می‌دارد.
 package ir.asteam.telegrambotstore
 
-import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PhoneInTalk
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Android
-import androidx.compose.material.icons.outlined.Category
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.Key
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Login
-import androidx.compose.material.icons.outlined.Logout
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PersonAdd
-import androidx.compose.material.icons.outlined.ReceiptLong
-import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.ShoppingBag
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.WorkspacePremium
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.util.Locale
 
-val Blue = Color(0xFF4C8DFF)
+// رنگ اصلی آبی رابط کاربری و دکمه‌های عمومی برنامه است.
+val Blue = Color(0xFF5B8CFF)
+// رنگ آبی اختصاصی بخش تلگرام است.
 val TelegramBlue = Color(0xFF229ED9)
+// رنگ سبز اختصاصی بخش واتساپ است.
 val WhatsAppGreen = Color(0xFF25D366)
-val RubikaPurple = Color(0xFF7C5CFC)
-val BaleGreen = Color(0xFF19A974)
+// رنگ بنفش اختصاصی بخش روبیکا است.
+val RubikaPurple = Color(0xFF8B5CF6)
+// رنگ سبز-فیروزه‌ای اختصاصی بخش بله است.
+val BaleGreen = Color(0xFF14B8A6)
+// رنگ پس‌زمینه‌ی اصلی برنامه است.
 val Bg = Color(0xFF07111F)
-val Surface = Color(0xFF0F1B2D)
-val Surface2 = Color(0xFF16253A)
-val TextMuted = Color(0xFF91A0B5)
+// رنگ سطح اول کارت‌ها و پنل‌ها است.
+val Surface = Color(0xFF0E1B2E)
+// رنگ سطح دوم برای نوارهای داخلی و جدول‌ها است.
+val Surface2 = Color(0xFF172941)
+// رنگ متن‌های توضیحی و کم‌اهمیت‌تر است.
+val TextMuted = Color(0xFF9BA9BD)
+// رنگ وضعیت موفق و فعال است.
 val Success = Color(0xFF2DD4BF)
+// رنگ وضعیت هشدار و «به‌زودی» است.
 val Warning = Color(0xFFFFB84D)
-val Danger = Color(0xFFFF6B7A)
+// رنگ خطا، حذف و قیمت قبلی است.
+val Danger = Color(0xFFFF5D73)
 
+// این enum تمام صفحات قابل نمایش در نسخه‌ی ۱.۲.۱ را تعریف می‌کند.
 enum class V12Page(val title: String) {
-    DASHBOARD("داشبورد"),
-    SUBSCRIPTIONS("اشتراک ربات‌ها"),
-    CONNECT("اتصال ربات"),
-    BOT_MANAGER("ویرایش ربات"),
-    PRODUCTS("محصولات"),
-    CATEGORIES("دسته‌بندی‌ها"),
-    PREVIEW("پیش‌نمایش ربات"),
-    SETTINGS("تنظیمات"),
-    SYNC("همگام‌سازی ربات‌ها"),
-    ABOUT("درباره ما"),
-    CONTACT("تماس با ما"),
-    APP_INFO("درباره نرم‌افزار")
+    DASHBOARD("داشبورد"), SUBSCRIPTIONS("اشتراک ربات‌ها"), CONNECT("اتصال ربات"), BOT_MANAGER("مدیریت ربات"), PRODUCTS("محصولات"), CATEGORIES("دسته‌بندی‌ها"), PREVIEW("پیش‌نمایش ربات"), SETTINGS("تنظیمات"), SYNC("همگام‌سازی ربات‌ها"), ABOUT("درباره ما"), CONTACT("تماس با ما"), APP_INFO("درباره نرم‌افزار")
 }
 
-data class SubscriptionPlan(
-    val title: String,
-    val days: Int,
-    val price: Long,
-    val oldPrice: Long? = null,
-    val discount: Int? = null,
-    val badge: String? = null
-)
+// این data class مشخصات هر پلن اشتراک را نگه می‌دارد.
+data class SubscriptionPlan(val title: String, val days: Int, val price: Long, val oldPrice: Long? = null, val discount: Int? = null, val badge: String? = null)
 
+// این لیست قیمت‌های تاییدشده‌ی نسخه‌ی ۱.۲.۱ را به ترتیب زمانی نگه می‌دارد.
 val subscriptionPlans = listOf(
     SubscriptionPlan("هفتگی", 7, 50_000),
     SubscriptionPlan("یک ماهه", 30, 180_000, 200_000, 10),
@@ -171,6 +65,7 @@ val subscriptionPlans = listOf(
     SubscriptionPlan("یک ساله", 365, 1_584_000, 2_400_000, 34, "به‌صرفه‌ترین")
 )
 
+// این Composable سربرگ حساب کاربر در منوی همبرگری را می‌سازد.
 @Composable
 fun DrawerHeader(name: String, phone: String, loggedIn: Boolean, admin: Boolean) {
     Row(Modifier.fillMaxWidth().padding(22.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -183,76 +78,60 @@ fun DrawerHeader(name: String, phone: String, loggedIn: Boolean, admin: Boolean)
     }
 }
 
+// این Composable یک گزینه‌ی استاندارد منوی همبرگری را می‌سازد.
 @Composable
 fun DrawerItem(icon: ImageVector, text: String, selected: Boolean, onClick: () -> Unit) {
-    NavigationDrawerItem(
-        label = { Text(text) }, selected = selected, onClick = onClick, icon = { Icon(icon, null) },
-        modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-        colors = NavigationDrawerItemDefaults.colors(selectedContainerColor = Blue.copy(alpha = .16f))
-    )
+    NavigationDrawerItem(label = { Text(text) }, selected = selected, onClick = onClick, icon = { Icon(icon, null) }, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp), colors = NavigationDrawerItemDefaults.colors(selectedContainerColor = Blue.copy(alpha = .16f)))
 }
 
+// این Composable یک گزینه‌ی نوار پایین برنامه را می‌سازد.
 @Composable
 fun RowScope.BottomNavItem(target: V12Page, current: V12Page, icon: ImageVector, onPage: (V12Page) -> Unit) {
     NavigationBarItem(selected = current == target, onClick = { onPage(target) }, icon = { Icon(icon, null) }, label = { Text(target.title, fontSize = 10.sp) })
 }
 
+// این Composable نشان رباتی داخل برنامه را با ظاهر شفاف و مدرن می‌سازد.
 @Composable
 fun RobotLogo(size: Int) {
-    Box(Modifier.size(size.dp).background(Brush.linearGradient(listOf(Blue, RubikaPurple)), RoundedCornerShape((size * 0.30f).dp)), contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.SmartToy, null, tint = Color.White, modifier = Modifier.size((size * 0.58f).dp))
+    Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size((size * .86f).dp).background(Brush.radialGradient(listOf(Blue.copy(alpha = .24f), Color.Transparent)), CircleShape))
+        Icon(Icons.Filled.SmartToy, null, tint = Color.White, modifier = Modifier.size((size * .64f).dp))
+        Box(Modifier.align(Alignment.TopCenter).size((size * .10f).dp).background(Success, CircleShape))
     }
 }
 
-@Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) { Text(text, modifier = modifier, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp) }
+// این Composable عنوان استاندارد هر بخش را نمایش می‌دهد.
+@Composable fun SectionTitle(text: String, modifier: Modifier = Modifier) { Text(text, modifier = modifier, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp) }
 
+// این Composable یک برچسب کوچک وضعیت مانند فعال، تخفیف یا به‌زودی می‌سازد.
 @Composable
-fun StatusPill(text: String, accent: Color) {
-    Surface(color = accent.copy(alpha = .15f), shape = RoundedCornerShape(50)) {
-        Text(text, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
-    }
-}
+fun StatusPill(text: String, accent: Color) { Surface(color = accent.copy(alpha = .15f), shape = RoundedCornerShape(50)) { Text(text, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) } }
 
+// این Composable یک چیپ اطلاعاتی ساده در هدر ربات می‌سازد.
+@Composable fun InfoChip(text: String) { Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(50)) { Text(text, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) } }
+
+// این Composable یک نوار اطلاعاتی برای پلن یا دسترسی مدیر می‌سازد.
 @Composable
-fun InfoChip(text: String) {
-    Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(50)) { Text(text, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) }
-}
+fun InfoStrip(title: String, subtitle: String, accent: Color) { Surface(color = accent.copy(alpha = .10f), shape = RoundedCornerShape(13.dp), border = BorderStroke(1.dp, accent.copy(alpha = .25f))) { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, tint = accent); Spacer(Modifier.width(9.dp)); Column { Text(title, fontWeight = FontWeight.Bold); Text(subtitle, color = TextMuted, fontSize = 10.sp) } } } }
 
+// این Composable کارت عملیاتی برای مدیریت محصولات، دسته‌بندی یا پیش‌نمایش می‌سازد.
 @Composable
-fun InfoStrip(title: String, subtitle: String, accent: Color) {
-    Surface(color = accent.copy(alpha = .10f), shape = RoundedCornerShape(13.dp), border = BorderStroke(1.dp, accent.copy(alpha = .25f))) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.WorkspacePremium, null, tint = accent); Spacer(Modifier.width(9.dp)); Column { Text(title, fontWeight = FontWeight.Bold); Text(subtitle, color = TextMuted, fontSize = 10.sp) }
-        }
-    }
-}
+fun ActionCard(title: String, subtitle: String, icon: ImageVector, accent: Color, onClick: () -> Unit) { Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(18.dp)) { Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(46.dp).background(accent.copy(alpha = .15f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = accent) }; Spacer(Modifier.width(11.dp)); Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold); Text(subtitle, color = TextMuted, fontSize = 11.sp) }; Icon(Icons.Outlined.ChevronLeft, null, tint = TextMuted) } } }
 
+// این Composable کارت حالت خالی را برای نبود اطلاعات می‌سازد.
 @Composable
-fun ActionCard(title: String, subtitle: String, icon: ImageVector, accent: Color, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(18.dp)) {
-        Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(46.dp).background(accent.copy(alpha = .15f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = accent) }
-            Spacer(Modifier.width(11.dp)); Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold); Text(subtitle, color = TextMuted, fontSize = 11.sp) }; Icon(Icons.Outlined.ChevronLeft, null, tint = TextMuted)
-        }
-    }
-}
+fun EmptyCard(title: String, subtitle: String, icon: ImageVector) { Card(colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .06f))) { Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.size(64.dp).background(Blue.copy(alpha = .12f), RoundedCornerShape(21.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Blue, modifier = Modifier.size(34.dp)) }; Spacer(Modifier.height(13.dp)); Text(title, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(5.dp)); Text(subtitle, color = TextMuted, textAlign = TextAlign.Center, fontSize = 11.sp) } } }
 
-@Composable
-fun EmptyCard(title: String, subtitle: String, icon: ImageVector) {
-    Card(colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = .06f))) {
-        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(64.dp).background(Blue.copy(alpha = .12f), RoundedCornerShape(21.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = Blue, modifier = Modifier.size(34.dp)) }
-            Spacer(Modifier.height(13.dp)); Text(title, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(5.dp)); Text(subtitle, color = TextMuted, textAlign = TextAlign.Center, fontSize = 11.sp)
-        }
-    }
-}
+// این Composable کارت حالت خالی را در مرکز کل صفحه قرار می‌دهد.
+@Composable fun EmptyState(title: String, subtitle: String, icon: ImageVector) { Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) { EmptyCard(title, subtitle, icon) } }
 
-@Composable
-fun EmptyState(title: String, subtitle: String, icon: ImageVector) { Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) { EmptyCard(title, subtitle, icon) } }
-
+// این تابع رنگ اختصاصی هر پلتفرم را برمی‌گرداند.
 fun platformColor(platform: BotPlatform): Color = when (platform) { BotPlatform.TELEGRAM -> TelegramBlue; BotPlatform.WHATSAPP -> WhatsAppGreen; BotPlatform.RUBIKA -> RubikaPurple; BotPlatform.BALE -> BaleGreen }
+// این تابع آیکون اختصاصی هر پلتفرم را برمی‌گرداند.
 fun platformIcon(platform: BotPlatform): ImageVector = when (platform) { BotPlatform.TELEGRAM -> Icons.Filled.Send; BotPlatform.WHATSAPP -> Icons.Filled.PhoneInTalk; BotPlatform.RUBIKA -> Icons.Outlined.Language; BotPlatform.BALE -> Icons.Filled.Chat }
+// این تابع عدد Long را با جداکننده‌ی هزارگان و ارقام فارسی نمایش می‌دهد.
 fun Long.money(): String = String.format(Locale.US, "%,d", this).toPersian()
+// این تابع عدد Int را به رشته‌ی دارای ارقام فارسی تبدیل می‌کند.
 fun Int.toPersian(): String = toString().toPersian()
+// این تابع تمام ارقام انگلیسی داخل رشته را به معادل فارسی تبدیل می‌کند.
 fun String.toPersian(): String = map { ch -> when (ch) { '0' -> '۰'; '1' -> '۱'; '2' -> '۲'; '3' -> '۳'; '4' -> '۴'; '5' -> '۵'; '6' -> '۶'; '7' -> '۷'; '8' -> '۸'; '9' -> '۹'; else -> ch } }.joinToString("")
