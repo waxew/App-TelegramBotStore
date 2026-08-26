@@ -92,7 +92,7 @@ async function sendMainMenu(token: string, chatId: number, storeName: string, we
 async function sendProductDetail(supabase: any, token: string, chatId: number, botId: number, productId: number) {
   const { data: product, error } = await supabase
     .from('botstore_products')
-    .select('id, title, price, description, active')
+    .select('id, title, price, description, active, stock_enabled, stock_quantity')
     .eq('id', productId)
     .eq('bot_id', botId)
     .eq('active', true)
@@ -104,14 +104,21 @@ async function sendProductDetail(supabase: any, token: string, chatId: number, b
     return
   }
 
+  const stockEnabled = product.stock_enabled === true
+  const stockQuantity = Math.max(0, Number(product.stock_quantity ?? 0))
+  const soldOut = stockEnabled && stockQuantity <= 0
+  const stockText = !stockEnabled ? '📦 موجودی: نامحدود' : soldOut ? '⛔️ ناموجود' : `📦 موجودی: ${money(stockQuantity)}`
+
   await telegramCall(token, 'sendMessage', {
     chat_id: chatId,
-    text: `🛍️ ${product.title}\n\n${product.description || 'بدون توضیحات'}\n\n💳 ${money(Number(product.price))} تومان`,
+    text: `🛍️ ${product.title}\n\n${product.description || 'بدون توضیحات'}\n\n💳 ${money(Number(product.price))} تومان\n${stockText}`,
     reply_markup: {
-      inline_keyboard: [
-        [{ text: '➕ افزودن به سبد خرید', callback_data: `cart_add:${product.id}` }],
-        [{ text: '🛒 مشاهده سبد خرید', callback_data: 'cart_show' }],
-      ],
+      inline_keyboard: soldOut
+        ? [[{ text: '🛒 مشاهده سبد خرید', callback_data: 'cart_show' }]]
+        : [
+            [{ text: '➕ افزودن به سبد خرید', callback_data: `cart_add:${product.id}` }],
+            [{ text: '🛒 مشاهده سبد خرید', callback_data: 'cart_show' }],
+          ],
     },
   })
 }
@@ -158,7 +165,7 @@ async function sendCart(supabase: any, token: string, chatId: number, botId: num
   const productIds = cartRows.map((row: any) => Number(row.product_id))
   const { data: products, error: productsError } = await supabase
     .from('botstore_products')
-    .select('id, title, price, active')
+    .select('id, title, price, active, stock_enabled, stock_quantity')
     .eq('bot_id', botId)
     .in('id', productIds)
 
@@ -175,7 +182,10 @@ async function sendCart(supabase: any, token: string, chatId: number, botId: num
     const quantity = Number(row.quantity)
     const lineTotal = Number(product.price) * quantity
     total += lineTotal
-    lines.push(`${index + 1}) ${product.title} × ${quantity}\n${money(lineTotal)} تومان`)
+    const stockWarning = product.stock_enabled === true && Number(product.stock_quantity ?? 0) < quantity
+      ? '\n⚠️ موجودی فعلی کمتر از تعداد سبد است'
+      : ''
+    lines.push(`${index + 1}) ${product.title} × ${quantity}\n${money(lineTotal)} تومان${stockWarning}`)
     buttons.push([
       { text: `➖ ${product.title}`, callback_data: `cart_dec:${product.id}` },
       { text: `➕ ${quantity}`, callback_data: `cart_add:${product.id}` },
@@ -224,7 +234,7 @@ async function sendProducts(supabase: any, token: string, chatId: number, botId:
 
   const { data: products, error: productsError } = await supabase
     .from('botstore_products')
-    .select('id, title, price')
+    .select('id, title, price, stock_enabled, stock_quantity')
     .eq('bot_id', botId)
     .eq('active', true)
     .order('position')
@@ -241,7 +251,7 @@ async function sendProducts(supabase: any, token: string, chatId: number, botId:
     text: '🛍️ محصولات فروشگاه:',
     reply_markup: {
       inline_keyboard: products.map((product: any) => [{
-        text: `${product.title} — ${money(Number(product.price))} تومان`,
+        text: `${product.title} — ${money(Number(product.price))} تومان${product.stock_enabled === true && Number(product.stock_quantity ?? 0) <= 0 ? ' — ناموجود' : ''}` ,
         callback_data: `product:${product.id}`,
       }]),
     },
@@ -374,7 +384,13 @@ Deno.serve(async (req) => {
         })
 
         if (error || !checkoutRows?.length) {
-          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: 'سبد خرید خالی است یا ثبت سفارش در حال حاضر ممکن نیست.' })
+          const checkoutError = String(error?.message ?? '').toLowerCase()
+          const message = checkoutError.includes('insufficient stock')
+            ? '⚠️ موجودی یک یا چند محصول کمتر از تعداد سبد شماست. لطفاً سبد را اصلاح کنید.'
+            : checkoutError.includes('product not available')
+              ? '⚠️ یکی از محصولات سبد دیگر قابل خرید نیست. لطفاً سبد را بررسی کنید.'
+              : 'سبد خرید خالی است یا ثبت سفارش در حال حاضر ممکن نیست.'
+          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: message })
           return new Response('ok', { status: 200 })
         }
 
@@ -407,7 +423,7 @@ Deno.serve(async (req) => {
 
         const { data: products, error: productsError } = await supabase
           .from('botstore_products')
-          .select('id, title, price')
+          .select('id, title, price, stock_enabled, stock_quantity')
           .eq('bot_id', botId)
           .eq('category_id', categoryId)
           .eq('active', true)
@@ -423,7 +439,7 @@ Deno.serve(async (req) => {
             text: `${category.emoji || '🛍️'} ${category.title}\nمحصول موردنظر را انتخاب کنید:`,
             reply_markup: {
               inline_keyboard: products.map((product: any) => [{
-                text: `${product.title} — ${money(Number(product.price))} تومان`,
+                text: `${product.title} — ${money(Number(product.price))} تومان${product.stock_enabled === true && Number(product.stock_quantity ?? 0) <= 0 ? ' — ناموجود' : ''}` ,
                 callback_data: `product:${product.id}`,
               }]),
             },
@@ -450,7 +466,11 @@ Deno.serve(async (req) => {
         })
 
         if (error) {
-          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: 'این محصول در حال حاضر قابل افزودن به سبد نیست.' })
+          const cartError = String(error.message ?? '').toLowerCase()
+          const message = cartError.includes('insufficient stock')
+            ? '⚠️ تعداد درخواستی از موجودی فعلی این محصول بیشتر است.'
+            : 'این محصول در حال حاضر قابل افزودن به سبد نیست.'
+          await telegramCall(token, 'sendMessage', { chat_id: chatId, text: message })
         } else {
           await sendCart(supabase, token, chatId, botId, telegramUserId)
         }
