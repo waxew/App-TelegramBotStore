@@ -32,30 +32,8 @@ object TelegramApi {
     // Endpoint Sync محصولات و دسته‌بندی‌های محلی را به فروشگاه واقعی Telegram منتقل می‌کند.
     private const val SYNC_ENDPOINT = "$BACKEND_BASE/botstore-sync"
 
-    // این تابع برای سازگاری با کدهای قدیمی فقط اعتبار Token را مستقیماً با getMe بررسی می‌کند.
-    suspend fun validateToken(token: String): Result<TelegramBotInfo> = withContext(Dispatchers.IO) {
-        // تمام خطاها داخل Result بسته‌بندی می‌شوند تا رابط کاربری کرش نکند.
-        runCatching {
-            // فرمت اولیه Token قبل از درخواست شبکه بررسی می‌شود.
-            require(token.matches(Regex("^[0-9]{6,12}:[A-Za-z0-9_-]{20,}$"))) { "فرمت توکن صحیح نیست" }
-
-            // درخواست getMe ساخته و اجرا می‌شود.
-            val body = getJson("https://api.telegram.org/bot$token/getMe")
-
-            // پاسخ ناموفق Telegram به خطای قابل نمایش تبدیل می‌شود.
-            if (!body.optBoolean("ok")) {
-                error(body.optString("description", "توکن توسط تلگرام تایید نشد"))
-            }
-
-            // مشخصات Bot از بخش result استخراج می‌شود.
-            val result = body.getJSONObject("result")
-            TelegramBotInfo(
-                id = result.getLong("id"),
-                username = result.optString("username"),
-                firstName = result.optString("first_name")
-            )
-        }
-    }
+    // نام قدیمی این تابع برای سازگاری UI حفظ شده است، اما حالا اتصال واقعی Backend و setWebhook را انجام می‌دهد.
+    suspend fun validateToken(token: String): Result<TelegramBotInfo> = connectBot(token)
 
     // این تابع اتصال واقعی را انجام می‌دهد: Token را به Backend می‌فرستد، getMe سروری انجام می‌شود و Webhook فعال می‌شود.
     suspend fun connectBot(token: String): Result<TelegramBotInfo> = withContext(Dispatchers.IO) {
@@ -137,37 +115,6 @@ object TelegramApi {
                 categoriesSynced = response.optInt("categories_synced"),
                 productsSynced = response.optInt("products_synced")
             )
-        }
-    }
-
-    // درخواست GET JSON عمومی با timeout استاندارد اجرا می‌شود.
-    private fun getJson(url: String): JSONObject {
-        // اتصال HTTP ساخته می‌شود.
-        val connection = URL(url).openConnection() as HttpURLConnection
-        // متد GET مشخص می‌شود.
-        connection.requestMethod = "GET"
-        // timeout اتصال تنظیم می‌شود.
-        connection.connectTimeout = 10_000
-        // timeout خواندن پاسخ تنظیم می‌شود.
-        connection.readTimeout = 10_000
-
-        return try {
-            // status code برای انتخاب stream موفق یا خطا خوانده می‌شود.
-            val status = connection.responseCode
-            // متن پاسخ کامل خوانده می‌شود.
-            val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()
-                ?.use { it.readText() }
-                .orEmpty()
-
-            // پاسخ خالی خطای شبکه محسوب می‌شود.
-            if (text.isBlank()) error("پاسخ خالی از سرور دریافت شد")
-
-            // متن به JSONObject تبدیل می‌شود.
-            JSONObject(text)
-        } finally {
-            // اتصال در هر شرایطی بسته می‌شود.
-            connection.disconnect()
         }
     }
 
