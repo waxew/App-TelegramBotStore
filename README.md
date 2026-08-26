@@ -2,9 +2,9 @@
 
 اپلیکیشن اندروید فارسی AS Team برای ساخت، اتصال و مدیریت ربات‌های فروشگاهی تلگرام در یک پنل واحد.
 
-## نسخه فعلی: 1.4.0
+## نسخه فعلی: 1.4.1
 
-نسخه `1.4.0` هسته فروشگاه‌ساز واقعی را روی Backend چندرباته تثبیت می‌کند. ربات‌های ساخته‌شده فقط داخل APK تعریف نمی‌شوند؛ Runtime آن‌ها روی Supabase فعال است و با بسته بودن برنامه نیز از طریق Telegram Webhook کار می‌کنند.
+نسخه `1.4.1` مدیریت Catalog را به ساختار واقعی «دسته‌بندی ← محصول» تبدیل می‌کند. ساخت محصول بدون Category مجاز نیست، هر Product با `categoryId` پایدار به Category متصل می‌شود و قابلیت موجودی/جلوگیری از Oversell نسخه فعلی نیز حفظ شده است. Runtime ربات‌ها همچنان روی Supabase و مستقل از باز بودن APK اجرا می‌شود.
 
 ## امکانات فعلی
 
@@ -17,7 +17,10 @@
 - Back Stack داخلی و بازگشت صحیح از صفحات
 - مدیریت چند Bot و انتخاب واقعی Bot فعال
 - پلن اشتراک مستقل برای هر Bot
-- مدیریت محصولات و دسته‌بندی‌های مستقل هر Bot
+- مدیریت Category-first؛ ابتدا دسته‌بندی ساخته می‌شود و Product فقط داخل یک Category واقعی قابل ایجاد است
+- نمایش Productها به‌صورت گروه‌بندی‌شده داخل Category و امکان انتقال Product بین دسته‌ها
+- ویرایش/حذف امن Category با جلوگیری از حذف دسته دارای Product
+- موجودی عددی اختیاری برای Product و نمایش وضعیت موجودی
 - پیش‌نمایش منوی Bot
 - صفحه سفارش‌های فروشگاه
 - صفحه کاربران فروشگاه و Block / Unblock
@@ -45,11 +48,14 @@
 - Block شدن واقعی کاربر در Runtime همان فروشگاه
 - متن خوش‌آمدگویی، پشتیبانی و درباره اختصاصی هر Bot
 - Deep Link پایدار محصول با `/start p_<source_id>`
+- نمایش موجودی Product و جلوگیری از افزودن بیش از Stock
+- Checkout با کنترل و کاهش اتمیک موجودی برای جلوگیری از Oversell
 
 ### Catalog و داده
 
 - Catalog مستقل برای هر Bot در Android و PostgreSQL
 - `source_id` پایدار برای Product و Category
+- `categoryId` پایدار در Android؛ تغییر نام Category اتصال Productها را قطع نمی‌کند
 - Upsert به‌جای Replace-All؛ تغییر قیمت یا عنوان، شناسه Product را عوض نمی‌کند
 - حفظ Cartهای باز هنگام ویرایش Catalog
 - Sync خودکار Android → Backend
@@ -82,6 +88,7 @@ Backend روی Supabase Edge Functions و PostgreSQL اجرا می‌شود. Fun
 - `botstore-disconnect`: `deleteWebhook` و حذف Runtime Bot
 - `botstore-manage`: سفارش‌ها، کاربران، Block/Unblock و تنظیمات عمومی
 - `botstore-broadcast`: صف ارسال همگانی قابل Resume
+- `botstore-inventory`: مدیریت موجودی Product برای فروشنده
 
 Migrationها و سورس Functionها در `backend/supabase/` نسخه‌بندی شده‌اند تا Backend از Repository قابل بازسازی باشد.
 
@@ -105,7 +112,6 @@ Migrationها و سورس Functionها در `backend/supabase/` نسخه‌بن�
 
 ## موارد باقی‌مانده برای نسخه‌های بعد
 
-- موجودی و رزرو موجودی
 - پرداخت و درگاه ایرانی
 - Telegram Stars برای سناریوهای مجاز
 - کد تخفیف
@@ -124,16 +130,16 @@ Migrationها و سورس Functionها در `backend/supabase/` نسخه‌بن�
 
 `ir.asteam.telegrambotstore`
 
-نسخه `1.4.0` دارای `versionCode = 16` است و برای نصب روی نسخه‌های `1.3.x` طراحی شده است. SharedPreferences و Catalog محلی نسخه‌های قبلی حفظ و در صورت نیاز migrate می‌شوند.
+نسخه `1.4.1` دارای `versionCode = 17` است و برای نصب مستقیم روی `1.4.0` و نسخه‌های قبلی سازگار طراحی شده است. SharedPreferences و Catalog محلی حفظ می‌شوند و Productهای قدیمی در صورت امکان از عنوان Category به `categoryId` پایدار migrate می‌شوند.
 
-نسخه `1.3.0` مبنای اولین Release Key دائمی پروژه است. نسخه `1.4.0` و تمام نسخه‌های بعدی باید با همان کلید Release امضا شوند تا Android آن‌ها را به‌عنوان Update معتبر بپذیرد.
+نسخه `1.3.0` مبنای اولین Release Key دائمی پروژه است. نسخه `1.4.1` و تمام نسخه‌های بعدی باید با همان کلید Release امضا شوند تا Android آن‌ها را به‌عنوان Update معتبر بپذیرد.
 
 ## Build
 
 - Java 17
 - Gradle 8.7
 - Workflow عمومی: `.github/workflows/build-apk.yml`
-- Workflow قابل تکرار نسخه: `.github/workflows/build-v140.yml`
+- Workflow قابل تکرار نسخه: `.github/workflows/build-v141.yml`
 - Artifact Release به‌صورت unsigned در GitHub ساخته می‌شود و Signing نهایی خارج از مخزن عمومی با JKS دائمی انجام می‌شود.
 - کلید خصوصی و Password هرگز داخل Repository قرار نمی‌گیرند.
 

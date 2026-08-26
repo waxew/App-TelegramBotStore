@@ -634,10 +634,15 @@ private fun V12Shell(
                             Icons.Filled.SmartToy
                         )
                     }
-                    // مدیریت محصولات نمایش داده می‌شود.
-                    V12Page.PRODUCTS -> V12Products(products, categories, onProducts)
-                    // مدیریت دسته‌بندی‌ها نمایش داده می‌شود.
-                    V12Page.CATEGORIES -> V12Categories(categories, onCategories)
+                    // مدیریت محصولات بر اساس Category نمایش داده می‌شود و اگر Category وجود نداشته باشد مستقیم به ساخت دسته هدایت می‌کند.
+                    V12Page.PRODUCTS -> V12Products(
+                        products = products,
+                        categories = categories,
+                        onChange = onProducts,
+                        onOpenCategories = { onPage(V12Page.CATEGORIES) }
+                    )
+                    // صفحه Category تعداد/ارتباط Productهای هر دسته را نیز می‌شناسد تا حذف والد دارای Product ممکن نباشد.
+                    V12Page.CATEGORIES -> V12Categories(categories, products, onCategories)
                     // سفارش‌های واقعی همان Bot از Backend بارگذاری و مدیریت می‌شوند.
                     V12Page.ORDERS -> V12Orders(selectedBot)
                     // کاربران همان فروشگاه و وضعیت Block/Unblock مدیریت می‌شوند.
