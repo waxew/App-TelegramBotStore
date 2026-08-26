@@ -41,15 +41,23 @@
 - بررسی دوباره Block قبل از ارسال
 - اصلاح انتخاب واقعی Bot در حالت چندرباته
 
-## v1.5 — فروشگاه کامل و موجودی
+## v1.4.1 — Catalog دسته‌بندی‌محور و موجودی ✅
+
+- Category-first در Android
+- انتخاب اجباری Category هنگام افزودن/ویرایش Product
+- اتصال پایدار Product به Category با `categoryId/source_id`
+- نمایش Productها داخل Category
+- انتقال Product بین Categoryها
+- جلوگیری از حذف Category دارای Product
+- موجودی عددی Product
+- کنترل Stock در Cart و Checkout
+- جلوگیری اتمیک از Oversell
+- نمایش وضعیت موجودی در Telegram Runtime
+
+## v1.5 — تکمیل قابلیت‌های فروشگاه
 
 اولویت بعدی:
 
-- موجودی عددی Product
-- رزرو موجودی هنگام Checkout
-- جلوگیری از Oversell
-- هشدار اتمام موجودی
-- فعال/غیرفعال کردن Product بر اساس Stock
 - کد تخفیف
 - جستجوی Product
 - تصویر و گالری Product
@@ -60,7 +68,6 @@
 - یادداشت سفارش
 - اطلاعات تکمیلی مشتری
 - تغییر گروهی قیمت
-- انتقال Product بین Categoryها
 - Health Check و وضعیت Webhook داخل Android
 - صفحه آخرین خطای Runtime
 - Backup / Restore تنظیمات Bot

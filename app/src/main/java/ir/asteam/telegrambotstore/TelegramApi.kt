@@ -116,8 +116,9 @@ object TelegramApi {
         runCatching {
             requireValidToken(token)
 
-            // عنوان Category به UUID محلی آن نگاشت می‌شود تا Product به Category پایدار وصل شود.
-            val categoryIdByTitle = categories.associate { category -> category.title to category.id }
+            // UUID Category منبع اصلی ارتباط Product است؛ نگاشت عنوان فقط برای مهاجرت داده‌های قدیمی نگه داشته می‌شود.
+            val categoryById = categories.associateBy { category -> category.id }
+            val categoryByTitle = categories.associateBy { category -> category.title.trim().lowercase() }
 
             // UUID هر Category به‌عنوان source_id ارسال می‌شود تا PK Backend در Syncهای بعدی تغییر نکند.
             val categoryArray = JSONArray().apply {
@@ -135,14 +136,17 @@ object TelegramApi {
             // UUID Product و UUID Category همراه اطلاعات نمایشی ارسال می‌شوند؛ Product غیرفعال نیز برای حفظ هویت Sync می‌شود.
             val productArray = JSONArray().apply {
                 products.forEach { product ->
+                    // ابتدا categoryId پایدار مصرف می‌شود؛ title قدیمی فقط fallback برای کاربران نسخه‌های قبل است.
+                    val category = categoryById[product.categoryId]
+                        ?: categoryByTitle[product.category.trim().lowercase()]
                     put(
                         JSONObject()
                             .put("id", product.id)
                             .put("source_id", product.id)
                             .put("title", product.title)
                             .put("price", product.price)
-                            .put("category", product.category)
-                            .put("category_source_id", categoryIdByTitle[product.category].orEmpty())
+                            .put("category", category?.title.orEmpty())
+                            .put("category_source_id", category?.id.orEmpty())
                             .put("description", product.description)
                             .put("active", product.active)
                             .put("stock_enabled", product.stockEnabled)

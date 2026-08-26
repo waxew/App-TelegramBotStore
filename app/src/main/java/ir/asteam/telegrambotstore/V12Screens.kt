@@ -669,20 +669,22 @@ fun V12BotManager(
     }
 }
 
-// مدیریت محصولات فقط برای Bot فعال انجام می‌شود؛ callback همچنان کل لیست را برای سازگاری Activity برمی‌گرداند.
+// مدیریت محصولات فقط برای Bot فعال انجام می‌شود؛ ساختار صفحه بر اساس «دسته‌بندی ← محصولات» است.
 @Composable
 fun V12Products(
     products: List<StoreProduct>,
     categories: List<StoreCategory>,
-    onChange: (List<StoreProduct>) -> Unit
+    onChange: (List<StoreProduct>) -> Unit,
+    onOpenCategories: () -> Unit
 ) {
-    // Context برای fallback انتخاب اولین Bot استفاده می‌شود.
+    // Context برای fallback انتخاب اولین Bot و Share Sheet استفاده می‌شود.
     val context = LocalContext.current
 
     // شناسه Bot فعال از Session یا اولین Bot ذخیره‌شده تعیین می‌شود.
     val ownerBotId = CatalogSelection.botId.ifBlank {
         remember { LocalStore(context).loadBots().firstOrNull()?.id.orEmpty() }
     }
+
     // اطلاعات Bot برای ساخت لینک مستقیم t.me هر Product استفاده می‌شود.
     val ownerBot = remember(ownerBotId) { LocalStore(context).loadBots().firstOrNull { it.id == ownerBotId } }
 
@@ -692,23 +694,40 @@ fun V12Products(
         return
     }
 
-    // آیتم‌های قابل نمایش فقط متعلق به Bot فعال هستند.
+    // داده صفحه فقط از Catalog متعلق به Bot فعال ساخته می‌شود.
     val visibleProducts = products.filter { it.botId == ownerBotId }
     val visibleCategories = categories.filter { it.botId == ownerBotId }
 
-    // این تابع تغییرات زیرلیست Bot را با Catalog سایر Botها Merge می‌کند.
+    // Category واقعی محصول با UUID پایدار پیدا می‌شود و عنوان فقط fallback داده‌های قدیمی است.
+    fun categoryFor(product: StoreProduct): StoreCategory? =
+        visibleCategories.firstOrNull { it.id == product.categoryId }
+            ?: visibleCategories.firstOrNull {
+                it.title.trim().equals(product.category.trim(), ignoreCase = true)
+            }
+
+    // تغییرات محصولات همین Bot با داده سایر Botها Merge و ارتباط Category نیز نرمال می‌شود.
     fun saveVisibleProducts(updated: List<StoreProduct>) {
-        // داده سایر Botها بدون تغییر حفظ می‌شود.
+        // محصولات سایر Botها بدون تغییر حفظ می‌شوند.
         val otherBotsProducts = products.filterNot { it.botId == ownerBotId }
 
-        // تمام آیتم‌های صفحه به‌طور قطعی با ownerBotId فعلی برچسب می‌خورند.
-        val ownedUpdated = updated.map { product -> product.copy(botId = ownerBotId) }
+        // categoryId منبع اصلی ارتباط است و title فعلی Category به‌عنوان داده سازگاری ذخیره می‌شود.
+        val ownedUpdated = updated.map { product ->
+            val category = visibleCategories.firstOrNull { it.id == product.categoryId }
+                ?: visibleCategories.firstOrNull {
+                    it.title.trim().equals(product.category.trim(), ignoreCase = true)
+                }
+            product.copy(
+                botId = ownerBotId,
+                categoryId = category?.id.orEmpty(),
+                category = category?.title ?: product.category
+            )
+        }
 
-        // لیست کامل به Activity برگردانده می‌شود.
+        // لیست کامل برای ذخیره و Sync به Activity برگردانده می‌شود.
         onChange(otherBotsProducts + ownedUpdated)
     }
 
-    // هنگام ورود به صفحه، Stock واقعی Backend روی Productهای محلی همان UUID Merge می‌شود؛ stockVersion عمداً دست‌نخورده می‌ماند.
+    // هنگام ورود به صفحه، Stock واقعی Backend روی همان UUID Product Merge می‌شود؛ نسخه Stock محلی عمداً دست‌نخورده می‌ماند.
     LaunchedEffect(ownerBotId, ownerBot?.token) {
         val token = ownerBot?.token.orEmpty()
         if (token.isBlank()) return@LaunchedEffect
@@ -726,66 +745,167 @@ fun V12Products(
         }
     }
 
-    // Dialog افزودن محصول کنترل می‌شود.
-    var add by remember { mutableStateOf(false) }
-    // Product انتخاب‌شده برای ویرایش قیمت، دسته و موجودی نگهداری می‌شود.
-    var editingProduct by remember { mutableStateOf<StoreProduct?>(null) }
+    // شناسه Category برای افزودن Product و شناسه Product برای ویرایش نگهداری می‌شوند.
+    var addCategoryId by remember { mutableStateOf<String?>(null) }
+    var editingProductId by remember { mutableStateOf<String?>(null) }
+
+    // محصولی که باید حذف شود برای جلوگیری از حذف تصادفی در Dialog تأیید نگهداری می‌شود.
+    var deletingProductId by remember { mutableStateOf<String?>(null) }
+
+    // بدون Category افزودن Product مجاز نیست؛ کاربر مستقیم به صفحه ساخت دسته هدایت می‌شود.
+    if (visibleCategories.isEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(Icons.Outlined.Category, null, tint = Blue, modifier = Modifier.size(58.dp))
+            Spacer(Modifier.height(14.dp))
+            Text("اول دسته‌بندی بسازید", fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+            Spacer(Modifier.height(7.dp))
+            Text(
+                "محصول بدون دسته‌بندی ساخته نمی‌شود. ابتدا حداقل یک دسته ایجاد کنید و سپس محصولات را داخل همان دسته اضافه کنید.",
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                fontSize = 11.sp
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onOpenCategories) {
+                Icon(Icons.Outlined.AddBox, null)
+                Spacer(Modifier.width(7.dp))
+                Text("ساخت دسته‌بندی")
+            }
+        }
+        return
+    }
+
+    // محصولات دارای Category معتبر داخل همان Category نمایش داده می‌شوند.
+    val productsByCategory = visibleCategories.associate { category ->
+        category.id to visibleProducts.filter { product -> categoryFor(product)?.id == category.id }
+    }
+
+    // محصولات قدیمی که هنوز Category معتبر ندارند حذف نمی‌شوند و برای اصلاح جداگانه نمایش داده می‌شوند.
+    val uncategorizedProducts = visibleProducts.filter { product -> categoryFor(product) == null }
 
     Box(Modifier.fillMaxSize()) {
-        if (visibleProducts.isEmpty()) {
-            EmptyState("هنوز محصولی ندارید", "اولین محصول این فروشگاه را اضافه کنید.", Icons.Outlined.Inventory2)
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 90.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-                items(visibleProducts, key = { it.id }) { product ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(17.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(45.dp).background(TelegramBlue.copy(alpha = .14f), RoundedCornerShape(13.dp)),
-                                contentAlignment = Alignment.Center
-                            ) { Icon(Icons.Outlined.ShoppingBag, null, tint = TelegramBlue) }
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 100.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // راهنمای ساختار صفحه به کاربر نشان می‌دهد Product مستقیماً زیر Category قرار می‌گیرد.
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Blue.copy(alpha = .10f)), shape = RoundedCornerShape(18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.AccountTree, null, tint = Blue)
+                        Spacer(Modifier.width(9.dp))
+                        Column {
+                            Text("ساختار فروشگاه", fontWeight = FontWeight.Bold)
+                            Text("هر محصول باید عضو یکی از دسته‌بندی‌های زیر باشد.", color = TextMuted, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+
+            // هر Category یک ظرف مستقل دارد و Productهای همان Category داخل آن رندر می‌شوند.
+            items(visibleCategories, key = { category -> category.id }) { category ->
+                val categoryProducts = productsByCategory[category.id].orEmpty()
+
+                Card(colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(category.emoji, fontSize = 25.sp)
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(product.title, fontWeight = FontWeight.Bold)
-                                Text(product.price.money() + " تومان", color = TelegramBlue, fontSize = 11.sp)
-                                if (product.category.isNotBlank()) {
-                                    Text(product.category, color = TextMuted, fontSize = 9.sp)
-                                }
-                                // وضعیت موجودی روی کارت Product بدون ورود به Dialog قابل مشاهده است.
-                                Text(
-                                    if (!product.stockEnabled) "موجودی: نامحدود"
-                                    else if (product.stockQuantity <= 0) "ناموجود"
-                                    else "موجودی: ${product.stockQuantity.toPersian()}",
-                                    color = if (product.stockEnabled && product.stockQuantity <= 0) Danger else TextMuted,
-                                    fontSize = 9.sp
-                                )
+                                Text(category.title, fontWeight = FontWeight.ExtraBold)
+                                Text("${categoryProducts.size.toPersian()} محصول", color = TextMuted, fontSize = 9.sp)
                             }
-                            // ویرایش Product موجود شناسه پایدار آن را حفظ می‌کند.
-                            IconButton(onClick = { editingProduct = product }) {
-                                Icon(Icons.Outlined.Edit, "ویرایش محصول", tint = Blue)
+                            TextButton(onClick = { addCategoryId = category.id }) {
+                                Icon(Icons.Filled.Add, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("محصول")
                             }
-                            // لینک پایدار Product با UUID محلی ساخته و از Share Sheet سیستم ارسال می‌شود.
-                            TelegramApi.productDeepLink(ownerBot?.username.orEmpty(), product.id)?.let { link ->
-                                IconButton(onClick = {
-                                    context.startActivity(
-                                        Intent.createChooser(
-                                            Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(Intent.EXTRA_TEXT, link)
-                                            },
-                                            "اشتراک لینک محصول"
+                        }
+
+                        HorizontalDivider(color = Color.White.copy(alpha = .07f))
+
+                        // Category خالی نیز نمایش داده می‌شود تا کاربر مستقیماً اولین Product را داخل آن بسازد.
+                        if (categoryProducts.isEmpty()) {
+                            Text(
+                                "هنوز محصولی داخل این دسته نیست.",
+                                color = TextMuted,
+                                fontSize = 10.sp,
+                                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            categoryProducts.forEachIndexed { index, product ->
+                                CatalogProductRow(
+                                    product = product,
+                                    botUsername = ownerBot?.username.orEmpty(),
+                                    onShare = { link ->
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT, link)
+                                                },
+                                                "اشتراک لینک محصول"
+                                            )
                                         )
+                                    },
+                                    onEdit = { editingProductId = product.id },
+                                    onDelete = { deletingProductId = product.id }
+                                )
+                                if (index != categoryProducts.lastIndex) {
+                                    HorizontalDivider(
+                                        color = Color.White.copy(alpha = .05f),
+                                        modifier = Modifier.padding(horizontal = 14.dp)
                                     )
-                                }) {
-                                    Icon(Icons.Outlined.Share, "اشتراک لینک مستقیم محصول", tint = Success)
                                 }
                             }
-                            IconButton(onClick = {
-                                saveVisibleProducts(visibleProducts.filterNot { it.id == product.id })
-                            }) {
-                                Icon(Icons.Outlined.Delete, null, tint = Danger)
+                        }
+                    }
+                }
+            }
+
+            // این بخش فقط برای نجات داده legacy است؛ Product جدید هرگز بدون Category ساخته نمی‌شود.
+            if (uncategorizedProducts.isNotEmpty()) {
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = .10f)), shape = RoundedCornerShape(20.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp)) {
+                            Text(
+                                "محصولات نیازمند تعیین دسته‌بندی",
+                                fontWeight = FontWeight.Bold,
+                                color = Danger,
+                                modifier = Modifier.padding(horizontal = 14.dp)
+                            )
+                            Text(
+                                "این موارد از نسخه قبلی باقی مانده‌اند. با ویرایش هر محصول یک دسته معتبر انتخاب کنید.",
+                                color = TextMuted,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                            )
+                            uncategorizedProducts.forEach { product ->
+                                CatalogProductRow(
+                                    product = product,
+                                    botUsername = ownerBot?.username.orEmpty(),
+                                    onShare = { link ->
+                                        context.startActivity(
+                                            Intent.createChooser(
+                                                Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT, link)
+                                                },
+                                                "اشتراک لینک محصول"
+                                            )
+                                        )
+                                    },
+                                    onEdit = { editingProductId = product.id },
+                                    onDelete = { deletingProductId = product.id }
+                                )
                             }
                         }
                     }
@@ -793,152 +913,307 @@ fun V12Products(
             }
         }
 
+        // FAB همیشه Product جدید را داخل یک Category واقعی آغاز می‌کند.
         FloatingActionButton(
-            onClick = { add = true },
+            onClick = { addCategoryId = visibleCategories.first().id },
             modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
             containerColor = Blue
-        ) { Icon(Icons.Filled.Add, null) }
+        ) { Icon(Icons.Filled.Add, "افزودن محصول") }
     }
 
-    if (add) {
-        var title by remember { mutableStateOf("") }
-        var price by remember { mutableStateOf("") }
-        var category by remember { mutableStateOf(visibleCategories.firstOrNull()?.title ?: "") }
-        // موجودی برای Product جدید اختیاری است؛ خاموش بودن یعنی نامحدود مانند نسخه‌های قبلی.
-        var stockEnabled by remember { mutableStateOf(false) }
-        var stockQuantity by remember { mutableStateOf("0") }
-
-        AlertDialog(
-            onDismissRequest = { add = false },
-            title = { Text("محصول جدید") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(title, { title = it }, label = { Text("نام محصول") }, singleLine = true)
-                    OutlinedTextField(
-                        price,
-                        { price = it.filter(Char::isDigit) },
-                        label = { Text("قیمت (تومان)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                    OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
-                    // Switch مشخص می‌کند موجودی این Product محدود است یا نامحدود.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("ردیابی موجودی", fontWeight = FontWeight.Bold)
-                            Text(if (stockEnabled) "فروش بیشتر از موجودی جلوگیری می‌شود" else "موجودی نامحدود", color = TextMuted, fontSize = 9.sp)
-                        }
-                        Switch(stockEnabled, { stockEnabled = it })
-                    }
-                    if (stockEnabled) {
-                        OutlinedTextField(
-                            stockQuantity,
-                            { stockQuantity = it.filter(Char::isDigit) },
-                            label = { Text("تعداد موجودی") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val newProduct = StoreProduct(
-                            title = title.trim(),
-                            price = price.toLongOrNull() ?: 0,
-                            category = category.trim(),
-                            stockEnabled = stockEnabled,
-                            stockQuantity = if (stockEnabled) stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0,
-                            // Product دارای Stock از اولین مقدار یک نسخه یکتا می‌گیرد تا Backend آن را به‌عنوان تنظیم عمدی فروشنده بپذیرد.
-                            stockVersion = if (stockEnabled) java.util.UUID.randomUUID().toString() else "",
-                            botId = ownerBotId
-                        )
-                        saveVisibleProducts(visibleProducts + newProduct)
-                        add = false
-                    },
-                    enabled = title.isNotBlank() && price.toLongOrNull() != null &&
-                        (!stockEnabled || stockQuantity.toIntOrNull() != null)
-                ) { Text("ذخیره") }
-            },
-            dismissButton = { TextButton(onClick = { add = false }) { Text("انصراف") } }
+    // Dialog افزودن Product فقط وقتی حداقل یک Category معتبر وجود دارد باز می‌شود.
+    addCategoryId?.let { initialCategoryId ->
+        CatalogProductEditorDialog(
+            categories = visibleCategories,
+            product = null,
+            botId = ownerBotId,
+            initialCategoryId = initialCategoryId,
+            onDismiss = { addCategoryId = null },
+            onSave = { newProduct ->
+                saveVisibleProducts(visibleProducts + newProduct)
+                addCategoryId = null
+            }
         )
     }
 
-    // Dialog ویرایش Product همان UUID را نگه می‌دارد تا Cart و Deep Link آن بعد از تغییر نشکنند.
-    editingProduct?.let { product ->
-        var editTitle by remember(product.id) { mutableStateOf(product.title) }
-        var editPrice by remember(product.id) { mutableStateOf(product.price.toString()) }
-        var editCategory by remember(product.id) { mutableStateOf(product.category) }
-        var editStockEnabled by remember(product.id) { mutableStateOf(product.stockEnabled) }
-        var editStockQuantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }
-
-        AlertDialog(
-            onDismissRequest = { editingProduct = null },
-            title = { Text("ویرایش محصول") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(editTitle, { editTitle = it }, label = { Text("نام محصول") }, singleLine = true)
-                    OutlinedTextField(
-                        editPrice,
-                        { editPrice = it.filter(Char::isDigit) },
-                        label = { Text("قیمت (تومان)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                    OutlinedTextField(editCategory, { editCategory = it }, label = { Text("دسته‌بندی") }, singleLine = true)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("ردیابی موجودی", fontWeight = FontWeight.Bold)
-                            Text(if (editStockEnabled) "Checkout موجودی را کنترل و کم می‌کند" else "موجودی نامحدود", color = TextMuted, fontSize = 9.sp)
-                        }
-                        Switch(editStockEnabled, { editStockEnabled = it })
-                    }
-                    if (editStockEnabled) {
-                        OutlinedTextField(
-                            editStockQuantity,
-                            { editStockQuantity = it.filter(Char::isDigit) },
-                            label = { Text("تعداد موجودی") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                    }
+    // همان Editor برای ویرایش نام، قیمت، توضیح، وضعیت و Category محصول استفاده می‌شود.
+    editingProductId?.let { productId ->
+        visibleProducts.firstOrNull { it.id == productId }?.let { product ->
+            CatalogProductEditorDialog(
+                categories = visibleCategories,
+                product = product,
+                botId = ownerBotId,
+                initialCategoryId = categoryFor(product)?.id ?: visibleCategories.first().id,
+                onDismiss = { editingProductId = null },
+                onSave = { updatedProduct ->
+                    saveVisibleProducts(visibleProducts.map { if (it.id == updatedProduct.id) updatedProduct else it })
+                    editingProductId = null
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val nextStockQuantity = if (editStockEnabled)
-                            editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0
-                        else 0
-                        val stockChanged = editStockEnabled != product.stockEnabled ||
-                            nextStockQuantity != product.stockQuantity
+            )
+        }
+    }
 
-                        val updated = product.copy(
-                            title = editTitle.trim(),
-                            price = editPrice.toLongOrNull() ?: product.price,
-                            category = editCategory.trim(),
-                            stockEnabled = editStockEnabled,
-                            stockQuantity = nextStockQuantity,
-                            // تغییر قیمت/عنوان نسخه Stock را عوض نمی‌کند؛ فقط تغییر واقعی موجودی یک نسخه جدید می‌سازد.
-                            stockVersion = if (stockChanged) java.util.UUID.randomUUID().toString() else product.stockVersion
-                        )
-                        saveVisibleProducts(visibleProducts.map { old -> if (old.id == product.id) updated else old })
-                        editingProduct = null
-                    },
-                    enabled = editTitle.isNotBlank() && editPrice.toLongOrNull() != null &&
-                        (!editStockEnabled || editStockQuantity.toIntOrNull() != null)
-                ) { Text("ذخیره تغییرات") }
-            },
-            dismissButton = { TextButton(onClick = { editingProduct = null }) { Text("انصراف") } }
-        )
+    // حذف Product با تأیید انجام می‌شود تا لمس اشتباه باعث حذف فوری نشود.
+    deletingProductId?.let { productId ->
+        val product = visibleProducts.firstOrNull { it.id == productId }
+        if (product != null) {
+            AlertDialog(
+                onDismissRequest = { deletingProductId = null },
+                title = { Text("حذف محصول") },
+                text = { Text("«${product.title}» حذف شود؟") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            saveVisibleProducts(visibleProducts.filterNot { it.id == productId })
+                            deletingProductId = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Danger)
+                    ) { Text("حذف") }
+                },
+                dismissButton = { TextButton(onClick = { deletingProductId = null }) { Text("انصراف") } }
+            )
+        }
     }
 }
 
-// مدیریت دسته‌بندی‌ها فقط برای Bot فعال انجام می‌شود.
+// ردیف Product داخل Card دسته‌بندی ساخته می‌شود و عملیات ویرایش/اشتراک/حذف را ارائه می‌کند.
+@Composable
+private fun CatalogProductRow(
+    product: StoreProduct,
+    botUsername: String,
+    onShare: (String) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(42.dp).background(TelegramBlue.copy(alpha = .12f), RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) { Icon(Icons.Outlined.ShoppingBag, null, tint = TelegramBlue) }
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(product.title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (!product.active) StatusPill("غیرفعال", TextMuted)
+            }
+            Text(product.price.money() + " تومان", color = TelegramBlue, fontSize = 10.sp)
+            if (product.description.isNotBlank()) {
+                Text(product.description, color = TextMuted, fontSize = 9.sp, maxLines = 2)
+            }
+            // وضعیت موجودی داخل همان Category دیده می‌شود و برای صفرموجودی هشدار قرمز نمایش داده می‌شود.
+            Text(
+                if (!product.stockEnabled) "موجودی: نامحدود"
+                else if (product.stockQuantity <= 0) "ناموجود"
+                else "موجودی: ${product.stockQuantity.toPersian()}",
+                color = if (product.stockEnabled && product.stockQuantity <= 0) Danger else TextMuted,
+                fontSize = 9.sp
+            )
+        }
+
+        // لینک مستقیم فقط برای Botهایی که username معتبر دارند ساخته می‌شود.
+        TelegramApi.productDeepLink(botUsername, product.id)?.let { link ->
+            IconButton(onClick = { onShare(link) }) {
+                Icon(Icons.Outlined.Share, "اشتراک لینک مستقیم محصول", tint = Success)
+            }
+        }
+
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Outlined.Edit, "ویرایش محصول", tint = Blue)
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Outlined.Delete, "حذف محصول", tint = Danger)
+        }
+    }
+}
+
+// Dialog مشترک افزودن/ویرایش Product است؛ Category از لیست موجود انتخاب می‌شود و ورود متن آزاد مجاز نیست.
+@Composable
+private fun CatalogProductEditorDialog(
+    categories: List<StoreCategory>,
+    product: StoreProduct?,
+    botId: String,
+    initialCategoryId: String,
+    onDismiss: () -> Unit,
+    onSave: (StoreProduct) -> Unit
+) {
+    // کلید state با Product تغییر می‌کند تا ویرایش آیتم دیگر مقادیر قبلی را نگه ندارد.
+    val editorKey = product?.id ?: "new-$initialCategoryId"
+
+    // فیلدهای ویرایش از Product موجود یا مقادیر اولیه Product جدید ساخته می‌شوند.
+    var title by remember(editorKey) { mutableStateOf(product?.title.orEmpty()) }
+    var price by remember(editorKey) { mutableStateOf(product?.price?.toString().orEmpty()) }
+    var description by remember(editorKey) { mutableStateOf(product?.description.orEmpty()) }
+    var active by remember(editorKey) { mutableStateOf(product?.active ?: true) }
+    // موجودی همان Product در Editor نگهداری می‌شود؛ خاموش بودن یعنی موجودی نامحدود.
+    var stockEnabled by remember(editorKey) { mutableStateOf(product?.stockEnabled ?: false) }
+    var stockQuantity by remember(editorKey) { mutableStateOf((product?.stockQuantity ?: 0).toString()) }
+
+    // Category معتبر اولیه از UUID، سپس عنوان legacy و در نهایت اولین Category انتخاب می‌شود.
+    val resolvedInitialCategoryId = remember(editorKey, categories) {
+        product?.categoryId?.takeIf { id -> categories.any { it.id == id } }
+            ?: categories.firstOrNull {
+                it.title.trim().equals(product?.category?.trim().orEmpty(), ignoreCase = true)
+            }?.id
+            ?: initialCategoryId.takeIf { id -> categories.any { it.id == id } }
+            ?: categories.firstOrNull()?.id.orEmpty()
+    }
+    var selectedCategoryId by remember(editorKey, resolvedInitialCategoryId) { mutableStateOf(resolvedInitialCategoryId) }
+    var categoryMenuOpen by remember(editorKey) { mutableStateOf(false) }
+
+    // Category انتخاب‌شده هم برای نمایش و هم برای ذخیره عنوان سازگاری استفاده می‌شود.
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (product == null) "محصول جدید" else "ویرایش محصول") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("نام محصول") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it.filter(Char::isDigit) },
+                    label = { Text("قیمت (تومان)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Category به‌صورت انتخابی است تا Product هرگز به نام آزاد یا Category ناموجود وصل نشود.
+                Box(Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { categoryMenuOpen = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            selectedCategory?.let { "${it.emoji} ${it.title}" } ?: "انتخاب دسته‌بندی",
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Start
+                        )
+                        Icon(Icons.Outlined.ArrowDropDown, null)
+                    }
+                    DropdownMenu(
+                        expanded = categoryMenuOpen,
+                        onDismissRequest = { categoryMenuOpen = false }
+                    ) {
+                        categories.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text("${category.emoji} ${category.title}") },
+                                onClick = {
+                                    selectedCategoryId = category.id
+                                    categoryMenuOpen = false
+                                },
+                                leadingIcon = if (category.id == selectedCategoryId) {
+                                    { Icon(Icons.Outlined.CheckCircle, null, tint = Success) }
+                                } else null
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("توضیحات محصول") },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // کنترل Stock در همان Editor نگه داشته می‌شود تا ساختار Category-first قابلیت موجودی نسخه جدید را از بین نبرد.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("ردیابی موجودی", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (stockEnabled) "فروش بیشتر از موجودی جلوگیری می‌شود" else "موجودی نامحدود",
+                            color = TextMuted,
+                            fontSize = 9.sp
+                        )
+                    }
+                    Switch(checked = stockEnabled, onCheckedChange = { stockEnabled = it })
+                }
+
+                if (stockEnabled) {
+                    OutlinedTextField(
+                        value = stockQuantity,
+                        onValueChange = { stockQuantity = it.filter(Char::isDigit) },
+                        label = { Text("تعداد موجودی") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // وضعیت نمایش Product در ربات نیز همزمان قابل ویرایش است.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("نمایش در فروشگاه", fontWeight = FontWeight.Bold)
+                        Text(if (active) "محصول فعال است" else "محصول مخفی است", color = TextMuted, fontSize = 9.sp)
+                    }
+                    Switch(checked = active, onCheckedChange = { active = it })
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    // selectedCategory باید واقعی باشد؛ بنابراین Product بدون Category ذخیره نمی‌شود.
+                    val category = selectedCategory ?: return@Button
+                    val nextStockQuantity = if (stockEnabled)
+                        stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                    else 0
+                    val stockChanged = product == null ||
+                        stockEnabled != product.stockEnabled ||
+                        nextStockQuantity != product.stockQuantity
+
+                    val base = product ?: StoreProduct(
+                        title = title.trim(),
+                        price = price.toLongOrNull() ?: 0L,
+                        categoryId = category.id,
+                        category = category.title,
+                        botId = botId
+                    )
+                    onSave(
+                        base.copy(
+                            title = title.trim(),
+                            price = price.toLongOrNull() ?: 0L,
+                            categoryId = category.id,
+                            category = category.title,
+                            description = description.trim(),
+                            active = active,
+                            stockEnabled = stockEnabled,
+                            stockQuantity = nextStockQuantity,
+                            // فقط تغییر عمدی Stock نسخه را عوض می‌کند؛ تغییر Category/نام/قیمت موجودی Backend را Reset نمی‌کند.
+                            stockVersion = when {
+                                product == null && !stockEnabled -> ""
+                                stockChanged -> java.util.UUID.randomUUID().toString()
+                                else -> base.stockVersion
+                            },
+                            botId = botId
+                        )
+                    )
+                },
+                enabled = title.isNotBlank() && price.toLongOrNull() != null && selectedCategory != null &&
+                    (!stockEnabled || stockQuantity.toIntOrNull() != null)
+            ) { Text("ذخیره") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }
+    )
+}
+
+// مدیریت دسته‌بندی‌ها فقط برای Bot فعال انجام می‌شود و تعداد Productهای هر Category را نیز کنترل می‌کند.
 @Composable
 fun V12Categories(
     categories: List<StoreCategory>,
+    products: List<StoreProduct>,
     onChange: (List<StoreCategory>) -> Unit
 ) {
     // Context برای fallback انتخاب Bot استفاده می‌شود.
@@ -955,8 +1230,15 @@ fun V12Categories(
         return
     }
 
-    // فقط Categoryهای Bot فعلی نمایش داده می‌شوند.
+    // فقط Category و Productهای Bot فعلی در مدیریت این صفحه استفاده می‌شوند.
     val visibleCategories = categories.filter { it.botId == ownerBotId }
+    val visibleProducts = products.filter { it.botId == ownerBotId }
+
+    // تعداد Productهای Category بر پایه UUID و برای legacy بر پایه عنوان محاسبه می‌شود.
+    fun productCount(category: StoreCategory): Int = visibleProducts.count { product ->
+        product.categoryId == category.id ||
+            (product.categoryId.isBlank() && product.category.trim().equals(category.title.trim(), ignoreCase = true))
+    }
 
     // تغییرات Category همین Bot با داده سایر Botها Merge می‌شود.
     fun saveVisibleCategories(updated: List<StoreCategory>) {
@@ -970,27 +1252,57 @@ fun V12Categories(
         onChange(otherBotsCategories + ownedUpdated)
     }
 
-    // Dialog افزودن دسته کنترل می‌شود.
+    // شناسه Category درحال ویرایش و Category درخواست‌شده برای حذف نگهداری می‌شوند.
     var add by remember { mutableStateOf(false) }
+    var editingCategoryId by remember { mutableStateOf<String?>(null) }
+    var deletingCategoryId by remember { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         if (visibleCategories.isEmpty()) {
-            EmptyState("هنوز دسته‌بندی ندارید", "برای منوی همین فروشگاه دسته‌بندی بسازید.", Icons.Outlined.Category)
+            EmptyState("هنوز دسته‌بندی ندارید", "اول دسته‌بندی بسازید؛ سپس محصولات را داخل آن قرار دهید.", Icons.Outlined.Category)
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 90.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 items(visibleCategories, key = { it.id }) { category ->
+                    // Productهای همین Category با UUID و fallback داده legacy پیدا می‌شوند و داخل Card والد دیده می‌شوند.
+                    val categoryProducts = visibleProducts.filter { product ->
+                        product.categoryId == category.id ||
+                            (product.categoryId.isBlank() && product.category.trim().equals(category.title.trim(), ignoreCase = true))
+                    }
+                    val count = categoryProducts.size
                     Card(colors = CardDefaults.cardColors(containerColor = Surface), shape = RoundedCornerShape(17.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(category.emoji, fontSize = 24.sp)
-                            Spacer(Modifier.width(10.dp))
-                            Text(category.title, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                            IconButton(onClick = {
-                                saveVisibleCategories(visibleCategories.filterNot { it.id == category.id })
-                            }) {
-                                Icon(Icons.Outlined.Delete, null, tint = Danger)
+                        Column(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(category.emoji, fontSize = 24.sp)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(category.title, fontWeight = FontWeight.Bold)
+                                    Text("${count.toPersian()} محصول داخل این دسته", color = TextMuted, fontSize = 9.sp)
+                                }
+                                IconButton(onClick = { editingCategoryId = category.id }) {
+                                    Icon(Icons.Outlined.Edit, "ویرایش دسته‌بندی", tint = Blue)
+                                }
+                                IconButton(onClick = { deletingCategoryId = category.id }) {
+                                    Icon(Icons.Outlined.Delete, "حذف دسته‌بندی", tint = Danger)
+                                }
+                            }
+
+                            // نام Productها زیر Category نشان داده می‌شود تا ساختار «دسته ← محصول» در همین صفحه هم قابل مشاهده باشد.
+                            if (categoryProducts.isNotEmpty()) {
+                                HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                                categoryProducts.forEach { product ->
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Outlined.Inventory2, null, tint = TelegramBlue, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(7.dp))
+                                        Text(product.title, modifier = Modifier.weight(1f), fontSize = 10.sp)
+                                        Text(product.price.money() + " تومان", color = TextMuted, fontSize = 9.sp)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1002,40 +1314,138 @@ fun V12Categories(
             onClick = { add = true },
             modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
             containerColor = Blue
-        ) { Icon(Icons.Filled.Add, null) }
+        ) { Icon(Icons.Filled.Add, "افزودن دسته‌بندی") }
     }
 
+    // Dialog ساخت Category جدید نمایش داده می‌شود.
     if (add) {
-        var title by remember { mutableStateOf("") }
-        var emoji by remember { mutableStateOf("🛍️") }
+        CatalogCategoryEditorDialog(
+            existing = visibleCategories,
+            category = null,
+            ownerBotId = ownerBotId,
+            onDismiss = { add = false },
+            onSave = { newCategory ->
+                saveVisibleCategories(visibleCategories + newCategory)
+                add = false
+            }
+        )
+    }
 
-        AlertDialog(
-            onDismissRequest = { add = false },
-            title = { Text("دسته‌بندی جدید") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(title, { title = it }, label = { Text("نام دسته") }, singleLine = true)
-                    OutlinedTextField(emoji, { emoji = it }, label = { Text("ایموجی") }, singleLine = true)
+    // ویرایش عنوان/ایموجی Category بدون تغییر UUID انجام می‌شود تا Productها متصل باقی بمانند.
+    editingCategoryId?.let { categoryId ->
+        visibleCategories.firstOrNull { it.id == categoryId }?.let { category ->
+            CatalogCategoryEditorDialog(
+                existing = visibleCategories,
+                category = category,
+                ownerBotId = ownerBotId,
+                onDismiss = { editingCategoryId = null },
+                onSave = { updatedCategory ->
+                    saveVisibleCategories(visibleCategories.map { if (it.id == categoryId) updatedCategory else it })
+                    editingCategoryId = null
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val newCategory = StoreCategory(
+            )
+        }
+    }
+
+    // Category دارای Product حذف نمی‌شود تا Productها بدون والد و خارج از ساختار فروشگاه نمانند.
+    deletingCategoryId?.let { categoryId ->
+        val category = visibleCategories.firstOrNull { it.id == categoryId }
+        if (category != null) {
+            val count = productCount(category)
+            AlertDialog(
+                onDismissRequest = { deletingCategoryId = null },
+                title = { Text(if (count > 0) "این دسته‌بندی محصول دارد" else "حذف دسته‌بندی") },
+                text = {
+                    Text(
+                        if (count > 0) {
+                            "داخل «${category.title}» تعداد ${count.toPersian()} محصول وجود دارد. ابتدا محصولات را به دسته دیگری منتقل یا حذف کنید؛ سپس دسته‌بندی را حذف کنید."
+                        } else {
+                            "دسته‌بندی «${category.title}» حذف شود؟"
+                        }
+                    )
+                },
+                confirmButton = {
+                    if (count > 0) {
+                        Button(onClick = { deletingCategoryId = null }) { Text("متوجه شدم") }
+                    } else {
+                        Button(
+                            onClick = {
+                                saveVisibleCategories(visibleCategories.filterNot { it.id == categoryId })
+                                deletingCategoryId = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Danger)
+                        ) { Text("حذف") }
+                    }
+                },
+                dismissButton = {
+                    if (count == 0) TextButton(onClick = { deletingCategoryId = null }) { Text("انصراف") }
+                }
+            )
+        }
+    }
+}
+
+// Dialog مشترک افزودن/ویرایش Category است و از نام تکراری در یک Bot جلوگیری می‌کند.
+@Composable
+private fun CatalogCategoryEditorDialog(
+    existing: List<StoreCategory>,
+    category: StoreCategory?,
+    ownerBotId: String,
+    onDismiss: () -> Unit,
+    onSave: (StoreCategory) -> Unit
+) {
+    // کلید مستقل باعث می‌شود داده Dialog هنگام تغییر Category قبلی باقی نماند.
+    val editorKey = category?.id ?: "new-category"
+    var title by remember(editorKey) { mutableStateOf(category?.title.orEmpty()) }
+    var emoji by remember(editorKey) { mutableStateOf(category?.emoji ?: "🛍️") }
+
+    // عنوان مشابه در همان Bot مجاز نیست؛ UUID مستقل است ولی نام تکراری تجربه Telegram را مبهم می‌کند.
+    val duplicateTitle = existing.any { item ->
+        item.id != category?.id && item.title.trim().equals(title.trim(), ignoreCase = true)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (category == null) "دسته‌بندی جدید" else "ویرایش دسته‌بندی") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("نام دسته") },
+                    singleLine = true,
+                    isError = duplicateTitle,
+                    supportingText = if (duplicateTitle) ({ Text("این نام قبلاً استفاده شده است.") }) else null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = emoji,
+                    onValueChange = { emoji = it },
+                    label = { Text("ایموجی") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val base = category ?: StoreCategory(title = title.trim(), botId = ownerBotId)
+                    onSave(
+                        base.copy(
                             title = title.trim(),
                             emoji = emoji.ifBlank { "🛍️" },
                             botId = ownerBotId
                         )
-                        saveVisibleCategories(visibleCategories + newCategory)
-                        add = false
-                    },
-                    enabled = title.isNotBlank()
-                ) { Text("ذخیره") }
-            },
-            dismissButton = { TextButton(onClick = { add = false }) { Text("انصراف") } }
-        )
-    }
+                    )
+                },
+                enabled = title.isNotBlank() && !duplicateTitle
+            ) { Text("ذخیره") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }
+    )
 }
+
 
 // پیش‌نمایش فقط Catalog همان Bot را نمایش می‌دهد.
 @Composable

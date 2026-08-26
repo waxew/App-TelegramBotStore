@@ -17,7 +17,10 @@ data class StoreProduct(
     val id: String = UUID.randomUUID().toString(),
     val title: String,
     val price: Long,
-    val category: String,
+    // categoryId اتصال پایدار Product به Category است و با تغییر عنوان Category از بین نمی‌رود.
+    val categoryId: String = "",
+    // category فقط برای سازگاری داده‌های نسخه‌های قبلی و نمایش عنوان Category نگهداری می‌شود.
+    val category: String = "",
     val description: String = "",
     val active: Boolean = true,
     // وقتی false باشد Product مانند نسخه‌های قبلی موجودی نامحدود دارد.
@@ -337,36 +340,68 @@ class LocalStore(context: Context) {
         prefs.edit().putString(KEY_CATEGORIES, array.toString()).apply()
     }
 
-    // محصولات بازیابی می‌شوند و محصولات legacy فاقد botId به اولین Bot قبلی متصل می‌شوند.
+    // محصولات بازیابی می‌شوند و داده‌های legacy به botId و categoryId پایدار مهاجرت می‌شوند.
     fun loadProducts(): List<StoreProduct> {
         // مالک پیش‌فرض برای مهاجرت داده‌های قدیمی تعیین می‌شود.
         val legacyBotId = defaultCatalogBotId()
 
+        // Categoryهای فعلی برای تبدیل نام Category قدیمی به UUID پایدار خوانده می‌شوند.
+        val categories = loadCategories()
+
+        // فقط وقتی داده legacy واقعاً تغییر کند نسخه مهاجرت‌شده دوباره ذخیره می‌شود.
+        var migrationNeeded = false
+
         // JSON محصولات parse می‌شود.
-        return runCatching {
+        val loaded = runCatching {
             val array = JSONArray(prefs.getString(KEY_PRODUCTS, "[]"))
             buildList {
                 for (i in 0 until array.length()) {
                     val item = array.getJSONObject(i)
+
+                    // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.
+                    val ownerBotId = item.optString("botId").ifBlank {
+                        migrationNeeded = true
+                        legacyBotId
+                    }
+
+                    // عنوان Category نسخه قبلی حفظ می‌شود تا هیچ Productی در مهاجرت حذف نشود.
+                    val legacyCategoryTitle = item.optString("category").trim()
+                    val storedCategoryId = item.optString("categoryId").trim()
+
+                    // برای داده legacy، Category فقط در همان Bot و با تطبیق نام پیدا می‌شود.
+                    val migratedCategory = categories.firstOrNull { category ->
+                        category.botId == ownerBotId &&
+                            category.title.trim().equals(legacyCategoryTitle, ignoreCase = true)
+                    }
+                    val resolvedCategoryId = storedCategoryId.ifBlank { migratedCategory?.id.orEmpty() }
+
+                    // UUID پیدا‌شده همان بار اول در SharedPreferences تثبیت می‌شود.
+                    if (storedCategoryId.isBlank() && resolvedCategoryId.isNotBlank()) migrationNeeded = true
+
                     add(
                         StoreProduct(
                             id = item.optString("id", UUID.randomUUID().toString()),
                             title = item.optString("title"),
                             price = item.optLong("price", 0L),
-                            category = item.optString("category"),
+                            categoryId = resolvedCategoryId,
+                            category = migratedCategory?.title ?: legacyCategoryTitle,
                             description = item.optString("description"),
                             active = item.optBoolean("active", true),
                             // Productهای نسخه‌های قبلی که فیلد Stock ندارند نامحدود باقی می‌مانند.
                             stockEnabled = item.optBoolean("stockEnabled", false),
                             stockQuantity = item.optInt("stockQuantity", 0).coerceAtLeast(0),
                             stockVersion = item.optString("stockVersion", ""),
-                            // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.
-                            botId = item.optString("botId").ifBlank { legacyBotId }
+                            botId = ownerBotId
                         )
                     )
                 }
             }
         }.getOrDefault(emptyList())
+
+        // مهاجرت یک‌بار ذخیره می‌شود و Stock/شناسه Product بدون تغییر باقی می‌مانند.
+        if (migrationNeeded) saveProducts(loaded)
+
+        return loaded
     }
 
     // محصولات همراه شناسه مالک Bot ذخیره می‌شوند.
@@ -381,6 +416,9 @@ class LocalStore(context: Context) {
                     put("id", item.id)
                     put("title", item.title)
                     put("price", item.price)
+                    // UUID Category منبع اصلی اتصال Product به Category است.
+                    put("categoryId", item.categoryId)
+                    // عنوان Category برای سازگاری نسخه‌های قبلی نیز ذخیره می‌شود.
                     put("category", item.category)
                     put("description", item.description)
                     put("active", item.active)

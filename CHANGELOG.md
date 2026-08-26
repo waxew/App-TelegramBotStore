@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v1.4.1
+
+- افزایش `versionCode` به 17 و `versionName` به `1.4.1` با حفظ `applicationId = ir.asteam.telegrambotstore`
+- تغییر کامل مدیریت Catalog به جریان Category-first؛ بدون Category امکان ساخت Product وجود ندارد
+- افزودن `categoryId` پایدار به مدل محلی Product و مهاجرت خودکار داده‌های قدیمی بر اساس Category همان Bot
+- حذف ورودی متن آزاد Category از فرم Product و جایگزینی با انتخاب اجباری از Categoryهای واقعی
+- نمایش Productها به‌صورت گروه‌بندی‌شده داخل Card هر Category در صفحه محصولات
+- نمایش Productهای هر Category داخل صفحه دسته‌بندی‌ها و نمایش تعداد دقیق Productها
+- افزودن امکان انتقال Product بین Categoryها هنگام ویرایش بدون تغییر UUID Product
+- جلوگیری از حذف Category دارای Product برای جلوگیری از داده یتیم
+- جلوگیری از نام تکراری Category در یک Bot
+- افزودن تأیید حذف Product برای جلوگیری از حذف تصادفی
+- Sync Catalog بر اساس `categoryId/source_id` به‌جای وابستگی اصلی به عنوان Category
+- حفظ کامل قابلیت موجودی، `stockVersion`، موجودی Backend و جلوگیری از Oversell هنگام تغییر ساختار Catalog
+- تغییر Workflow نسخه به `.github/workflows/build-v141.yml` و Artifactهای `App-BotStore-v1.4.1-*`
+
 ## v1.4.0
 
 - افزایش `versionCode` به 16 و `versionName` به `1.4.0` با حفظ `applicationId = ir.asteam.telegrambotstore`

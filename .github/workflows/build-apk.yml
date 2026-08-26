@@ -59,14 +59,14 @@ jobs:
       - name: Package source code
         shell: bash
         run: |
-          zip -r "$RUNNER_TEMP/App-BotStore-v1.4.0-source.zip" . \
+          zip -r "$RUNNER_TEMP/App-BotStore-v1.4.1-source.zip" . \
             -x '.git/*' '.gradle/*' '.idea/*' '*/build/*' '*.jks' '*.keystore' '*.idsig'
 
       # APK خام Release و apksigner برای مرحله امضای خصوصی ذخیره می‌شوند.
       - name: Upload release signing inputs
         uses: actions/upload-artifact@v4
         with:
-          name: App-BotStore-v1.4.0-release-inputs
+          name: App-BotStore-v1.4.1-release-inputs
           path: |
             app/build/outputs/apk/release/app-release-unsigned.apk
             ${{ runner.temp }}/apksigner.jar
@@ -77,7 +77,7 @@ jobs:
       - name: Upload source package
         uses: actions/upload-artifact@v4
         with:
-          name: App-BotStore-v1.4.0-source
-          path: ${{ runner.temp }}/App-BotStore-v1.4.0-source.zip
+          name: App-BotStore-v1.4.1-source
+          path: ${{ runner.temp }}/App-BotStore-v1.4.1-source.zip
           if-no-files-found: error
           retention-days: 30

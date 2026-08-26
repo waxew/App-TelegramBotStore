@@ -1,5 +1,5 @@
-# این Workflow مخصوص Build قابل تکرار App BotStore v1.4.0 از دقیقاً همان Commit موجود در main است.
-name: Build App BotStore v1.4.0
+# این Workflow مخصوص Build قابل تکرار App BotStore v1.4.1 از دقیقاً همان Commit موجود در main است.
+name: Build App BotStore v1.4.1
 
 # هر Push روی main و اجرای دستی Build را آغاز می‌کند تا Commitهای Connector هم Artifact دقیق تولید کنند.
 on:
@@ -47,23 +47,23 @@ jobs:
           mkdir -p release-inputs
           APK_PATH="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           test -n "$APK_PATH"
-          cp "$APK_PATH" release-inputs/App-BotStore-v1.4.0-unsigned.apk
+          cp "$APK_PATH" release-inputs/App-BotStore-v1.4.1-unsigned.apk
           printf '%s\n' "${GITHUB_SHA}" > release-inputs/HEAD_SHA.txt
-          sha256sum release-inputs/App-BotStore-v1.4.0-unsigned.apk > release-inputs/UNSIGNED_APK_SHA256.txt
+          sha256sum release-inputs/App-BotStore-v1.4.1-unsigned.apk > release-inputs/UNSIGNED_APK_SHA256.txt
 
       # سورس دقیق همان Git HEAD به ZIP تبدیل می‌شود.
       - name: Package exact source
         shell: bash
         run: |
           set -euo pipefail
-          git archive --format=zip --output=App-BotStore-v1.4.0-source.zip HEAD
+          git archive --format=zip --output=App-BotStore-v1.4.1-source.zip HEAD
           printf '%s\n' "${GITHUB_SHA}" > SOURCE_HEAD_SHA.txt
 
       # APK بدون امضا برای Signing خصوصی خارج از Repository ذخیره می‌شود.
       - name: Upload unsigned release APK
         uses: actions/upload-artifact@v4
         with:
-          name: App-BotStore-v1.4.0-release-inputs
+          name: App-BotStore-v1.4.1-release-inputs
           path: release-inputs/
           if-no-files-found: error
           retention-days: 30
@@ -72,9 +72,9 @@ jobs:
       - name: Upload exact source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: App-BotStore-v1.4.0-source
+          name: App-BotStore-v1.4.1-source
           path: |
-            App-BotStore-v1.4.0-source.zip
+            App-BotStore-v1.4.1-source.zip
             SOURCE_HEAD_SHA.txt
           if-no-files-found: error
           retention-days: 30

@@ -1,4 +1,4 @@
-// این فایل تنظیمات ساخت ماژول اصلی Android و وابستگی‌های نسخه ۱.۴.۰ را تعریف می‌کند.
+// این فایل تنظیمات ساخت ماژول اصلی Android و وابستگی‌های نسخه ۱.۴.۱ را تعریف می‌کند.
 plugins {
     // پلاگین استاندارد ساخت اپلیکیشن Android فعال می‌شود.
     id("com.android.application")
@@ -21,10 +21,10 @@ android {
         minSdk = 24
         // targetSdk روی API 35 قرار می‌گیرد.
         targetSdk = 35
-        // versionCode نسخه ۱.۴.۰ یک واحد افزایش می‌یابد تا به‌صورت Update روی ۱.۳.x نصب شود.
-        versionCode = 16
-        // نسخه ۱.۴.۰ هسته فروشگاه واقعی، سفارش، کاربران، مدیریت عمومی، لینک محصول و Broadcast را تثبیت می‌کند.
-        versionName = "1.4.0"
+        // versionCode نسخه ۱.۴.۱ افزایش می‌یابد تا روی ۱.۴.۰ با همان applicationId و Release Key نصب شود.
+        versionCode = 17
+        // نسخه ۱.۴.۱ مدیریت Category-first، اتصال پایدار Product به Category و قابلیت موجودی را تثبیت می‌کند.
+        versionName = "1.4.1"
 
         // Runner پیش‌فرض تست‌های Instrumentation تعیین می‌شود.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
