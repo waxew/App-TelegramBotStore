@@ -1,149 +1,187 @@
 # Backend واقعی App BotStore
 
-این سند معماری Backend چندرباته نسخه `1.3.1` را توضیح می‌دهد. هدف این Backend حل مشکل اصلی نسخه‌های قبلی است: در گذشته APK فقط BotFather Token را با `getMe` بررسی می‌کرد، اما خود Bot هیچ Worker/Webhook فعالی نداشت و `/start` پاسخی نمی‌گرفت.
+این سند معماری Backend چندرباته نسخه `1.4.0` را توضیح می‌دهد. Android پنل مدیریت است؛ اجرای Bot روی Supabase Edge Functions و PostgreSQL انجام می‌شود تا بسته بودن APK ربات را متوقف نکند.
 
-## جریان واقعی اتصال ربات
+## جریان اتصال
 
-1. کاربر در BotFather ربات خودش را می‌سازد و Token را دریافت می‌کند.
-2. کاربر Token را داخل App BotStore وارد می‌کند.
-3. `TelegramApi.validateToken()` برای سازگاری نام قبلی حفظ شده، ولی اکنون به `connectBot()` می‌رود.
-4. Android به Edge Function `botstore-register` درخواست می‌فرستد.
-5. Backend با Telegram `getMe` Token را دوباره روی سرور اعتبارسنجی می‌کند.
-6. مشخصات Bot در `botstore_bots` ذخیره/به‌روز می‌شود.
-7. Backend یک `webhook_secret` تصادفی می‌سازد.
-8. با `setWebhook` آدرس `botstore-telegram?bot_id=...` روی همان Bot ثبت می‌شود.
-9. از این لحظه Bot حتی با بسته بودن APK نیز Updateهای Telegram را از طریق Supabase Edge Function دریافت می‌کند.
-10. `/start` منوی واقعی فروشگاه را نمایش می‌دهد.
-11. Catalog Android با `botId` همان Bot جدا شده و فقط برای همان Token Sync می‌شود.
+1. کاربر Bot را در BotFather می‌سازد و Token را داخل App BotStore وارد می‌کند.
+2. Android به `botstore-register` درخواست می‌فرستد.
+3. Backend Token را با Telegram `getMe` اعتبارسنجی می‌کند.
+4. Bot در `botstore_bots` Upsert می‌شود.
+5. `webhook_secret` مستقل ساخته می‌شود.
+6. رکورد `botstore_settings` همان Bot ایجاد می‌شود بدون بازنویسی تنظیمات اتصال مجدد.
+7. `setWebhook` روی `botstore-telegram?bot_id=...` ثبت می‌شود.
+8. از این لحظه Runtime بدون وابستگی به APK Updateهای Telegram را پردازش می‌کند.
 
 ## Edge Functionها
 
 ### `botstore-register`
 
-وظیفه: ثبت Bot و فعال‌کردن Webhook.
-
-- ورودی: Bot Token
-- اعتبارسنجی فرمت Token
-- اعتبارسنجی واقعی با `getMe`
-- Upsert رکورد Bot
-- ساخت Secret مخصوص Webhook
-- ثبت `setWebhook`
-- خروجی فقط شامل اطلاعات غیرحساس Bot است
+- اعتبارسنجی Token
+- Upsert Bot
+- ایجاد تنظیمات پایه
+- ایجاد Webhook Secret
+- `setWebhook`
 
 ### `botstore-telegram`
 
-وظیفه: Webhook مشترک چندرباته.
+Runtime مشترک تمام Botها است. هر Update با `bot_id` URL و هدر `X-Telegram-Bot-Api-Secret-Token` به فروشگاه صحیح نگاشت می‌شود.
 
-هر Update با دو عامل به Bot درست نگاشت می‌شود:
+قابلیت‌ها:
 
-- `bot_id` در URL
-- هدر `X-Telegram-Bot-Api-Secret-Token`
-
-منوی MVP فعلی:
-
-- `🛍️ محصولات`
-- `👤 حساب من`
-- `☎️ پشتیبانی`
-- `ℹ️ درباره فروشگاه`
-
-دسته‌بندی‌ها با Inline Keyboard نمایش داده می‌شوند و انتخاب هر دسته، محصولات فعال همان دسته را از PostgreSQL می‌خواند.
+- `/start`
+- متن خوش‌آمدگویی اختصاصی
+- دسته‌بندی و Product
+- جزئیات Product
+- Deep Link پایدار `/start p_<source_id>`
+- سبد خرید
+- افزایش/کاهش Quantity
+- Checkout
+- سفارش‌های من
+- حساب مشتری
+- پشتیبانی و درباره اختصاصی
+- Block واقعی مشتری
 
 ### `botstore-sync`
 
-وظیفه: انتقال Catalog اختصاصی یک Bot از Android به همان Bot واقعی.
+Catalog فقط همان Bot را Sync می‌کند.
 
-- Token را دوباره با `getMe` بررسی می‌کند.
-- Bot باید قبلاً در `botstore-register` ثبت شده باشد.
-- دسته‌بندی‌ها و محصولات فقط همان `botId` توسط Android ارسال می‌شوند.
-- Catalog فعلی Bot را به‌صورت Replace-All با نسخه جدید همگام می‌کند.
-- داده Botهای دیگر دست‌نخورده می‌ماند.
+نسخه 1.4.0 از `source_id` پایدار Android و RPC `botstore_sync_catalog` استفاده می‌کند. Sync دیگر Replace-All نیست؛ بنابراین ویرایش نام/قیمت Product شناسه DB را تغییر نمی‌دهد و Cartهای باز سالم می‌مانند.
 
 ### `botstore-disconnect`
 
-وظیفه: خاموش‌کردن واقعی Bot حذف‌شده.
+- تطبیق Token دقیق Bot
+- `deleteWebhook`
+- حذف Bot از Backend
+- Cascade داده‌های وابسته همان Bot
+- idempotent
 
-- ورودی: Token همان Bot
-- lookup فقط با تطبیق دقیق Token در جدول server-only
-- اجرای `deleteWebhook` در Telegram
-- حذف رکورد `botstore_bots`
-- حذف خودکار Category/Product همان Bot به‌واسطه Foreign Keyهای `ON DELETE CASCADE`
-- عملیات idempotent است؛ اگر Bot قبلاً حذف شده باشد نیز موفق پاسخ می‌دهد
+### `botstore-manage`
 
-## همگام‌سازی و چرخه عمر Android
+API پنل فروشنده:
 
-فایل `CatalogSyncProvider.kt` هنگام شروع Process برنامه فعال می‌شود و تغییر این کلیدهای SharedPreferences را گوش می‌دهد:
+- Overview
+- لیست سفارش‌ها
+- جزئیات سفارش و Snapshot اقلام
+- تغییر وضعیت سفارش
+- لیست مشتری‌ها
+- Block / Unblock
+- خواندن تنظیمات عمومی
+- ذخیره تنظیمات عمومی
 
-- `connected_bots_v12`
-- `products`
-- `categories`
+### `botstore-broadcast`
 
-برای جلوگیری از درخواست‌های پشت‌سرهم، تغییرات با Debounce حدود 650 میلی‌ثانیه ترکیب می‌شوند.
+صف ارسال همگانی مستقل هر Bot:
 
-### Catalog مستقل
+- `list`: تاریخچه
+- `create`: ساخت Broadcast و Snapshot گیرنده‌ها، بدون ارسال پیام
+- `status`: خواندن وضعیت
+- `process`: پردازش Batch کوچک و قابل Resume
 
-`StoreProduct` و `StoreCategory` اکنون `botId` دارند. Provider برای هر Bot فقط آیتم‌هایی را انتخاب می‌کند که `botId` آن‌ها با شناسه همان Bot برابر است و سپس همان زیرمجموعه را به `botstore-sync` می‌فرستد.
-
-داده‌های نسخه‌های قدیمی که `botId` ندارند در شروع Process به Bot اصلی نسبت داده و بلافاصله دوباره ذخیره می‌شوند. این Migration قبل از ثبت Listener انجام می‌شود تا حذف Bot اول باعث انتقال ناخواسته Catalog legacy به Bot دیگری نشود.
-
-### حذف Bot
-
-Provider یک Snapshot از Botهای قبلی نگه می‌دارد. اگر Bot از `connected_bots_v12` حذف شود یا Token همان id تغییر کند، Provider `TelegramApi.disconnectBot()` را اجرا می‌کند. در نتیجه حذف داخل APK فقط ظاهری نیست و Runtime سرور نیز خاموش می‌شود.
-
-اگر Disconnect در همان Process به علت شبکه شکست بخورد، Bot قدیمی در Snapshot Retry نگه داشته می‌شود تا تغییر بعدی دوباره تلاش کند.
+فقط کاربران Block‌نشده همان Bot هنگام ساخت صف Snapshot می‌شوند. پیش از ارسال Batch نیز Block دوباره کنترل می‌شود. وضعیت هر گیرنده `pending/sent/failed` است؛ در نتیجه Resume باعث ارسال دوباره به کاربران `sent` نمی‌شود.
 
 ## دیتابیس
 
-Migration نسخه‌بندی‌شده:
-
-`backend/supabase/migrations/20260826_create_app_botstore_multibot.sql`
-
-جداول:
+جداول اصلی:
 
 - `botstore_bots`
+- `botstore_settings`
 - `botstore_categories`
 - `botstore_products`
+- `botstore_customers`
+- `botstore_cart_items`
+- `botstore_orders`
+- `botstore_order_items`
+- `botstore_broadcasts`
+- `botstore_broadcast_recipients`
 
-RLS روی هر سه جدول فعال است. نقش‌های `anon` و `authenticated` مجوز مستقیم ندارند و دسترسی داده فقط از Edge Functionهای Backend با نقش server-side انجام می‌شود.
+RPCهای اصلی:
+
+- `botstore_sync_catalog`: Upsert/Delete اتمیک Catalog پایدار
+- `botstore_cart_change`: تغییر اتمیک Cart
+- `botstore_checkout_order`: ساخت سفارش + اقلام Snapshot + پاک‌کردن Cart در یک تراکنش
+- `botstore_create_broadcast`: ساخت Broadcast و Snapshot تمام گیرنده‌های مجاز داخل PostgreSQL
+
+Migrationها در `backend/supabase/migrations/` نسخه‌بندی شده‌اند.
+
+## سفارش و Cart
+
+Cart با `(bot_id, telegram_user_id, product_id)` جدا می‌شود. Checkout با Advisory Lock روی `(bot,user)` سریالی شده تا دو لمس سریع یا درخواست هم‌زمان نتواند دو سفارش از یک Cart بسازد.
+
+`botstore_order_items` عنوان، قیمت واحد، Quantity و مبلغ خط را Snapshot می‌کند؛ بنابراین تغییر Catalog بعدی تاریخچه سفارش را خراب نمی‌کند.
+
+## تنظیمات فروشگاه
+
+`botstore_settings` یک رکورد برای هر Bot دارد:
+
+- `store_name`
+- `welcome_text`
+- `support_text`
+- `about_text`
+
+Runtime همین مقادیر را مستقیماً در پیام‌های بعدی Telegram مصرف می‌کند.
+
+## Deep Link محصول
+
+Android UUID محلی Product را به‌عنوان `source_id` پایدار Sync می‌کند. لینک فروشنده:
+
+`https://t.me/<bot_username>?start=p_<source_id>`
+
+Runtime `source_id` را به Product فعلی همان Bot Resolve می‌کند. تغییر عنوان یا قیمت لینک را نمی‌شکند.
+
+## Broadcast
+
+فرآیند عمداً دو مرحله دارد:
+
+1. Create: صف و Snapshot گیرنده‌ها ساخته می‌شوند؛ هیچ پیام Telegram ارسال نمی‌شود.
+2. Process: پس از تایید فروشنده Batchهای حداکثر 20تایی ارسال می‌شوند.
+
+اگر Android بسته شود، Loop Client لغو می‌شود ولی صف Backend و وضعیت گیرنده‌ها باقی می‌ماند. بازگشت به صفحه و Resume از اولین `pending` ادامه می‌دهد.
 
 ## امنیت
 
-- هیچ `service_role` یا Secret دیتابیس داخل APK قرار نگرفته است.
-- Webhook هر Bot Secret تصادفی مستقل دارد.
+- `service_role` داخل APK وجود ندارد.
+- RLS روی جداول BotStore فعال است.
+- `anon/authenticated` به جداول server-only مجوز مستقیم ندارند.
+- RPCهای حساس فقط برای `service_role` قابل اجرا هستند.
+- Webhook Secret برای هر Bot مستقل است.
 - Token در Logcat چاپ نمی‌شود.
-- Endpoint Webhook درخواست بدون Telegram Secret صحیح را نادیده می‌گیرد.
-- Endpointهای register/sync/disconnect در MVP از خود Bot Token به‌عنوان اثبات کنترل Bot استفاده می‌کنند.
+- عملیات مدیریتی MVP با Bot Token دقیق همان Bot احراز می‌شوند.
 
-### بدهی فنی امنیتی
+### بدهی امنیتی بعدی
 
-در MVP، Bot Token در جدول server-only ذخیره می‌شود تا Webhook بتواند Telegram Bot API را صدا بزند. قبل از انتشار بزرگ و چندمستاجری باید Tokenها با یک لایه Encryption/Vault سمت سرور نگهداری شوند و عملیات register/sync/disconnect نیز به حساب واقعی App BotStore و شناسه مالک Bot متصل شوند.
+Token Bot برای نیاز Runtime فعلاً در جدول server-only نگهداری می‌شود. قبل از مقیاس عمومی باید:
 
-## وضعیت فعلی v1.3.1
+- Token به Vault/Encryption منتقل شود.
+- Supabase Auth یا سیستم Auth معادل، مالکیت واقعی حساب ↔ Bot را برقرار کند.
+- عملیات Manage/Broadcast علاوه بر Bot Token به Session مالک وابسته شوند.
+- Audit log مدیریتی اضافه شود.
+
+## چرخه Android
+
+`CatalogSyncProvider` با `exported=false` تغییر Bot/Catalog را گوش می‌دهد، Debounce می‌کند و فقط Catalog همان Bot را Sync می‌کند. حذف Bot باعث `disconnectBot()` و خاموش‌شدن Runtime واقعی می‌شود.
+
+## وضعیت v1.4.0
 
 عملیاتی:
 
-- اعتبارسنجی Token
-- ثبت Bot
-- `setWebhook`
-- اجرای واقعی `/start`
-- منوی اصلی فروشگاه
-- خواندن دسته‌بندی‌ها و محصولات
-- Catalog مستقل برای هر Bot
-- Sync خودکار Catalog از Android
-- اجرای چند Bot روی یک Webhook مشترک
-- تشخیص حذف Bot و `deleteWebhook`
-- حذف cascade داده Backend همان Bot
+- Backend 24/7
+- Multi-Bot Webhook
+- Catalog مستقل و پایدار
+- Cart و Checkout
+- سفارش‌ها
+- مشتری‌ها و Block
+- تنظیمات عمومی
+- Deep Link Product
+- Broadcast قابل Resume
 
 مرحله بعد:
 
-- سفارش و سبد خرید
-- کیف پول و تراکنش
-- پنل کاربران فروشگاه
-- Block/Unblock
-- ارسال همگانی
-- لینک مستقیم محصول
-- موجودی
-- کد تخفیف
+- موجودی و رزرو موجودی
 - پرداخت
-- پشتیبانی اختصاصی فروشنده
-- Encryption/Vault Tokenها
-- اشتراک/Trial هفت‌روزه شبیه مدل Babba
+- کد تخفیف
+- آدرس/ارسال
+- Trial واقعی
+- Notification فروشنده
+- آمار/CRM پیشرفته
+- Vault و Auth حساب‌محور
