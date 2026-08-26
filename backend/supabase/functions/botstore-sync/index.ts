@@ -1,5 +1,5 @@
 // این Edge Function Catalog Android را با شناسه‌های پایدار به همان Bot واقعی همگام می‌کند.
-// برخلاف نسخه replace-all، ویرایش نام/قیمت دیگر PK محصول را عوض نمی‌کند و Cartهای باز مشتری‌ها حفظ می‌شوند.
+// در نسخه موجودی، stock_enabled و stock_quantity نیز همراه همان source_id پایدار Sync می‌شوند.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.95.0'
 
@@ -13,6 +13,8 @@ type InputProduct = {
   category_source_id?: string
   description?: string
   active?: boolean
+  stock_enabled?: boolean
+  stock_quantity?: number
 }
 
 function json(body: unknown, status = 200) {
@@ -94,12 +96,13 @@ Deno.serve(async (req) => {
     // نگاشت عنوان به source_id برای Clientهایی که Product هنوز فقط نام Category را ارسال می‌کند ساخته می‌شود.
     const categorySourceByTitle = new Map(categories.map((category) => [category.title, category.source_id]))
 
-    // Productها با id محلی پایدار و Category source_id نرمال می‌شوند.
+    // Productها با id محلی پایدار، Category و موجودی نرمال می‌شوند.
     const products = (body.products ?? [])
       .map((product) => {
         const title = String(product.title ?? '').trim()
         const sourceId = String(product.source_id ?? product.id ?? `title:${title}`).trim()
         const categoryTitle = String(product.category ?? '').trim()
+        const stockEnabled = product.stock_enabled === true
         return {
           source_id: sourceId,
           title,
@@ -107,11 +110,13 @@ Deno.serve(async (req) => {
           category_source_id: String(product.category_source_id ?? categorySourceByTitle.get(categoryTitle) ?? '').trim(),
           description: String(product.description ?? '').trim(),
           active: product.active !== false,
+          stock_enabled: stockEnabled,
+          stock_quantity: stockEnabled ? Math.max(0, Math.trunc(Number(product.stock_quantity ?? 0))) : 0,
         }
       })
       .filter((product) => product.source_id.length > 0 && product.title.length > 0)
 
-    // تمام Upsert/Deleteهای Catalog داخل یک RPC و یک تراکنش PostgreSQL اجرا می‌شوند.
+    // تمام Upsert/Deleteهای Catalog و Stock داخل یک RPC و یک تراکنش PostgreSQL اجرا می‌شوند.
     const { data: syncRows, error: syncError } = await supabase.rpc('botstore_sync_catalog', {
       p_bot_id: Number(bot.id),
       p_categories: categories,
@@ -126,6 +131,7 @@ Deno.serve(async (req) => {
       categories_synced: Number(result.categories_synced ?? categories.length),
       products_synced: Number(result.products_synced ?? products.length),
       stable_ids: true,
+      inventory_enabled: true,
     })
   } catch (error) {
     console.error('[botstore-sync]', error)
