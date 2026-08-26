@@ -1,0 +1,94 @@
+# این Workflow فقط یک بار برای تکمیل stockVersion در Android اجرا و سپس حذف می‌شود.
+name: One-time inventory version patch
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/one-time-inventory-version.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch inventory versioning
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'anchor not found in {path}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+              p.write_text(text)
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt',
+              '''    val stockQuantity: Int = 0,\n    val botId: String = ""\n)''',
+              '''    val stockQuantity: Int = 0,\n    // این Version فقط هنگام تغییر عمدی موجودی عوض می‌شود تا Sync تکراری Stock مصرف‌شده سرور را بازنویسی نکند.\n    val stockVersion: String = UUID.randomUUID().toString(),\n    val botId: String = ""\n)'''
+          )
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt',
+              '''                            stockQuantity = item.optInt("stockQuantity", 0).coerceAtLeast(0),\n                            // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.''',
+              '''                            stockQuantity = item.optInt("stockQuantity", 0).coerceAtLeast(0),\n                            // داده قدیمی بدون stockVersion یک Version قطعی بر اساس id می‌گیرد تا هر Load مقدار جدید نسازد.\n                            stockVersion = item.optString("stockVersion").ifBlank {\n                                "legacy-${item.optString("id", "product-$i")}"\n                            },\n                            // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.'''
+          )
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt',
+              '''                    put("stockQuantity", item.stockQuantity.coerceAtLeast(0))\n                    put("botId", item.botId)''',
+              '''                    put("stockQuantity", item.stockQuantity.coerceAtLeast(0))\n                    // stockVersion همراه Product ذخیره می‌شود تا Sync بعدی بتواند تغییر عمدی Stock را تشخیص دهد.\n                    put("stockVersion", item.stockVersion)\n                    put("botId", item.botId)'''
+          )
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/TelegramApi.kt',
+              '''                            .put("stock_quantity", product.stockQuantity.coerceAtLeast(0))''',
+              '''                            .put("stock_quantity", product.stockQuantity.coerceAtLeast(0))\n                            // Version موجودی فقط با تغییر عمدی فروشنده عوض می‌شود؛ Backend Sync تکراری همان Version را نادیده می‌گیرد.\n                            .put("stock_version", product.stockVersion)'''
+          )
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt',
+              '''import kotlinx.coroutines.launch\n''',
+              '''import kotlinx.coroutines.launch\nimport java.util.UUID\n'''
+          )
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt',
+              '''                            stockEnabled = stockEnabled,\n                            stockQuantity = if (stockEnabled) stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0,\n                            botId = ownerBotId''',
+              '''                            stockEnabled = stockEnabled,\n                            stockQuantity = if (stockEnabled) stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0,\n                            // Product جدید یک Version جدید Stock دارد تا اولین Sync مقدار اولیه را روی Backend اعمال کند.\n                            stockVersion = UUID.randomUUID().toString(),\n                            botId = ownerBotId'''
+          )
+
+          replace_once(
+              'app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt',
+              '''                    onClick = {\n                        val updated = product.copy(\n                            title = editTitle.trim(),\n                            price = editPrice.toLongOrNull() ?: product.price,\n                            category = editCategory.trim(),\n                            stockEnabled = editStockEnabled,\n                            stockQuantity = if (editStockEnabled) editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0\n                        )''',
+              '''                    onClick = {\n                        // مقدار نهایی Stock یک بار محاسبه می‌شود تا مقایسه و ذخیره دقیقاً روی یک مقدار انجام شوند.\n                        val newStockQuantity = if (editStockEnabled) {\n                            editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0\n                        } else {\n                            0\n                        }\n                        // فقط تغییر عمدی Switch یا Quantity باید Version موجودی را عوض کند.\n                        val stockChanged = product.stockEnabled != editStockEnabled ||\n                            product.stockQuantity != newStockQuantity\n                        val updated = product.copy(\n                            title = editTitle.trim(),\n                            price = editPrice.toLongOrNull() ?: product.price,\n                            category = editCategory.trim(),\n                            stockEnabled = editStockEnabled,\n                            stockQuantity = newStockQuantity,\n                            stockVersion = if (stockChanged) UUID.randomUUID().toString() else product.stockVersion\n                        )'''
+          )
+          PY
+
+          git diff --check
+          git diff -- app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt \
+            app/src/main/java/ir/asteam/telegrambotstore/TelegramApi.kt \
+            app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'AS Team BotStore CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add app/src/main/java/ir/asteam/telegrambotstore/LocalStore.kt \
+            app/src/main/java/ir/asteam/telegrambotstore/TelegramApi.kt \
+            app/src/main/java/ir/asteam/telegrambotstore/V12Screens.kt
+          git commit -m 'Complete Android inventory version synchronization'
+          git push origin HEAD:main
