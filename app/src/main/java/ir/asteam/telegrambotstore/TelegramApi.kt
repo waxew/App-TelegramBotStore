@@ -74,13 +74,10 @@ object TelegramApi {
     suspend fun connectBot(token: String): Result<TelegramBotInfo> = withContext(Dispatchers.IO) {
         runCatching {
             requireValidToken(token)
-
-            // Payload فقط شامل Token همان Bot است؛ هیچ Service Key یا Secret سرور در APK وجود ندارد.
             val payload = JSONObject().put("token", token)
             val response = postJson(REGISTER_ENDPOINT, payload)
             ensureBackendOk(response, "فعال‌سازی Webhook ربات ناموفق بود")
 
-            // اطلاعات تاییدشده Bot از پاسخ Backend خوانده می‌شود.
             val bot = response.getJSONObject("bot")
             TelegramBotInfo(
                 id = bot.getLong("id"),
@@ -94,17 +91,14 @@ object TelegramApi {
     suspend fun disconnectBot(token: String): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
             requireValidToken(token)
-
             val payload = JSONObject().put("token", token)
             val response = postJson(DISCONNECT_ENDPOINT, payload)
             ensureBackendOk(response, "حذف اتصال ربات از Backend ناموفق بود")
-
-            // disconnected=true یعنی رکورد فعلی حذف شد؛ already_removed نیز عملیات موفق محسوب می‌شود.
             response.optBoolean("disconnected") || response.optBoolean("already_removed")
         }
     }
 
-    // این تابع Catalog فعلی اپ را برای Bot انتخاب‌شده به Backend ارسال می‌کند.
+    // Catalog فعلی اپ را با UUIDهای پایدار Android برای همان Bot به Backend ارسال می‌کند.
     suspend fun syncCatalog(
         token: String,
         categories: List<StoreCategory>,
@@ -113,26 +107,35 @@ object TelegramApi {
         runCatching {
             requireValidToken(token)
 
-            // دسته‌بندی‌های Android به آرایه JSON تبدیل می‌شوند.
+            // عنوان Category به UUID محلی آن نگاشت می‌شود تا Product به Category پایدار وصل شود.
+            val categoryIdByTitle = categories.associate { category -> category.title to category.id }
+
+            // UUID هر Category به‌عنوان source_id ارسال می‌شود تا PK Backend در Syncهای بعدی تغییر نکند.
             val categoryArray = JSONArray().apply {
                 categories.forEach { category ->
                     put(
                         JSONObject()
+                            .put("id", category.id)
+                            .put("source_id", category.id)
                             .put("title", category.title)
                             .put("emoji", category.emoji)
                     )
                 }
             }
 
-            // محصولات Android همراه قیمت، دسته و توضیح به آرایه JSON تبدیل می‌شوند.
+            // UUID Product و UUID Category همراه اطلاعات نمایشی ارسال می‌شوند؛ Product غیرفعال نیز برای حفظ هویت Sync می‌شود.
             val productArray = JSONArray().apply {
-                products.filter { it.active }.forEach { product ->
+                products.forEach { product ->
                     put(
                         JSONObject()
+                            .put("id", product.id)
+                            .put("source_id", product.id)
                             .put("title", product.title)
                             .put("price", product.price)
                             .put("category", product.category)
+                            .put("category_source_id", categoryIdByTitle[product.category].orEmpty())
                             .put("description", product.description)
+                            .put("active", product.active)
                     )
                 }
             }
@@ -246,7 +249,6 @@ object TelegramApi {
             .put("token", token)
             .put("action", action)
 
-        // فیلدهای اضافی بدون بازنویسی Token/action به Payload منتقل می‌شوند.
         if (extra != null) {
             val keys = extra.keys()
             while (keys.hasNext()) {
