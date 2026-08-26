@@ -3,9 +3,9 @@ name: Build Android Release
 
 # رویدادهای اجرای Workflow تعریف می‌شوند.
 on:
-  # هر Push روی main باعث Build می‌شود.
+  # هر Push روی main باعث Build می‌شود؛ شاخه category-first-v141 فقط برای QA همین تغییر موقتاً اضافه شده است.
   push:
-    branches: [ main ]
+    branches: [ main, category-first-v141 ]
   # Pull Request به main نیز برای کنترل کامپایل Build می‌شود.
   pull_request:
     branches: [ main ]
