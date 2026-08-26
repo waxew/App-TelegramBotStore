@@ -1,4 +1,4 @@
-// این فایل تنظیمات ساخت ماژول اصلی Android و وابستگی‌های نسخه ۱.۲.۱ را تعریف می‌کند.
+// این فایل تنظیمات ساخت ماژول اصلی Android و وابستگی‌های نسخه ۱.۳.۰ را تعریف می‌کند.
 plugins {
     // پلاگین استاندارد ساخت اپلیکیشن Android فعال می‌شود.
     id("com.android.application")
@@ -13,18 +13,18 @@ android {
     // برنامه با API 35 کامپایل می‌شود.
     compileSdk = 35
 
-    // تنظیمات پیش‌فرض تمام build variantها تعریف می‌شود.
+    // تنظیمات پیش‌فرض تمام build variantها تعریف می‌شوند.
     defaultConfig {
-        // applicationId ثابت نگه داشته می‌شود تا v1.2.1 روی نسخه قبلی به‌عنوان Update نصب شود.
+        // applicationId ثابت نگه داشته می‌شود تا نسخه‌های آینده روی همین برنامه نصب شوند.
         applicationId = "ir.asteam.telegrambotstore"
         // حداقل اندروید قابل پشتیبانی API 24 است.
         minSdk = 24
         // targetSdk روی API 35 قرار می‌گیرد.
         targetSdk = 35
-        // versionCode نسبت به نسخه ۱.۲ افزایش داده می‌شود.
-        versionCode = 13
-        // versionName نسخه جدید روی ۱.۲.۱ قرار می‌گیرد.
-        versionName = "1.2.1"
+        // versionCode برای نسخه ۱.۳.۰ افزایش داده می‌شود.
+        versionCode = 14
+        // versionName نسخه پابلیش فعلی است.
+        versionName = "1.3.0"
 
         // Runner پیش‌فرض تست‌های Instrumentation تعیین می‌شود.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -36,13 +36,13 @@ android {
     buildTypes {
         // تنظیمات نسخه Release آغاز می‌شود.
         release {
-            // فعلاً minify برای شفاف ماندن سورس و عیب‌یابی غیرفعال است.
+            // برای نسخه فعلی minify غیرفعال است تا عیب‌یابی و خوانایی سورس ساده‌تر بماند.
             isMinifyEnabled = false
             // فایل‌های ProGuard استاندارد و سفارشی معرفی می‌شوند.
             proguardFiles(
                 // قوانین بهینه‌سازی استاندارد Android استفاده می‌شود.
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                // قوانین اختصاصی پروژه نیز اضافه می‌شود.
+                // قوانین اختصاصی پروژه نیز اضافه می‌شوند.
                 "proguard-rules.pro"
             )
         }
@@ -75,7 +75,7 @@ android {
 dependencies {
     // Core KTX APIهای Kotlin-friendly اندروید را فراهم می‌کند.
     implementation("androidx.core:core-ktx:1.13.1")
-    // Activity Compose اتصال Activity و Compose را فراهم می‌کند.
+    // Activity Compose اتصال Activity و Compose و BackHandler را فراهم می‌کند.
     implementation("androidx.activity:activity-compose:1.9.1")
     // Compose BOM نسخه‌های کتابخانه‌های Compose را هماهنگ می‌کند.
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
