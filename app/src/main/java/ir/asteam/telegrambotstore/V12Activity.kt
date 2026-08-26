@@ -415,6 +415,11 @@ private fun V12Shell(
                     selectedBot?.let { onPage(V12Page.BOT_MANAGER) } ?: onPage(V12Page.DASHBOARD)
                     scope.launch { drawer.close() }
                 }
+                // مدیریت عمومی نام و متن‌های اختصاصی Bot انتخاب‌شده را از Backend مدیریت می‌کند.
+                DrawerItem(Icons.Outlined.Tune, "مدیریت عمومی", page == V12Page.GENERAL_MANAGEMENT) {
+                    selectedBot?.let { onPage(V12Page.GENERAL_MANAGEMENT) } ?: onPage(V12Page.DASHBOARD)
+                    scope.launch { drawer.close() }
+                }
                 // محصولات از منوی اصلی در دسترس قرار می‌گیرد.
                 DrawerItem(Icons.Outlined.Inventory2, "محصولات", page == V12Page.PRODUCTS) {
                     onPage(V12Page.PRODUCTS)
@@ -608,11 +613,20 @@ private fun V12Shell(
                                 bot = selectedBot,
                                 onUpdate = onBotUpdate,
                                 onDelete = onBotDelete,
+                                onGeneralManagement = { onPage(V12Page.GENERAL_MANAGEMENT) },
                                 onProducts = { onPage(V12Page.PRODUCTS) },
                                 onCategories = { onPage(V12Page.CATEGORIES) },
                                 onPreview = { onPage(V12Page.PREVIEW) }
                             )
                         }
+                    }
+                    // مدیریت عمومی متن‌ها و نام فروشگاه را مستقیم از Backend همان Bot ویرایش می‌کند.
+                    V12Page.GENERAL_MANAGEMENT -> {
+                        selectedBot?.let { V12GeneralManagement(it) } ?: EmptyState(
+                            "رباتی انتخاب نشده",
+                            "ابتدا از داشبورد یک ربات را انتخاب کنید.",
+                            Icons.Filled.SmartToy
+                        )
                     }
                     // مدیریت محصولات نمایش داده می‌شود.
                     V12Page.PRODUCTS -> V12Products(products, categories, onProducts)

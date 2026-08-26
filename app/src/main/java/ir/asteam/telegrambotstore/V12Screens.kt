@@ -544,6 +544,7 @@ fun V12BotManager(
     bot: ConnectedBot,
     onUpdate: (ConnectedBot) -> Unit,
     onDelete: (ConnectedBot) -> Unit,
+    onGeneralManagement: () -> Unit,
     onProducts: () -> Unit,
     onCategories: () -> Unit,
     onPreview: () -> Unit
@@ -597,6 +598,7 @@ fun V12BotManager(
             }
         }
 
+        item { ActionCard("مدیریت عمومی", "نام فروشگاه، خوش‌آمدگویی، پشتیبانی و درباره", Icons.Outlined.Tune, Blue, onGeneralManagement) }
         item { ActionCard("محصولات", "مدیریت محصولات همین فروشگاه", Icons.Outlined.Inventory2, TelegramBlue, onProducts) }
         item { ActionCard("دسته‌بندی‌ها", "ساخت منوی مستقل همین فروشگاه", Icons.Outlined.Category, RubikaPurple, onCategories) }
         item { ActionCard("پیش‌نمایش ربات", "نمای تقریبی منوی همین Bot", Icons.Outlined.Visibility, Success, onPreview) }
@@ -679,6 +681,8 @@ fun V12Products(
     val ownerBotId = CatalogSelection.botId.ifBlank {
         remember { LocalStore(context).loadBots().firstOrNull()?.id.orEmpty() }
     }
+    // اطلاعات Bot برای ساخت لینک مستقیم t.me هر Product استفاده می‌شود.
+    val ownerBot = remember(ownerBotId) { LocalStore(context).loadBots().firstOrNull { it.id == ownerBotId } }
 
     // در نبود Bot، کاربر باید ابتدا یک Bot انتخاب یا متصل کند.
     if (ownerBotId.isBlank()) {
@@ -726,6 +730,22 @@ fun V12Products(
                                 Text(product.price.money() + " تومان", color = TelegramBlue, fontSize = 11.sp)
                                 if (product.category.isNotBlank()) {
                                     Text(product.category, color = TextMuted, fontSize = 9.sp)
+                                }
+                            }
+                            // لینک پایدار Product با UUID محلی ساخته و از Share Sheet سیستم ارسال می‌شود.
+                            TelegramApi.productDeepLink(ownerBot?.username.orEmpty(), product.id)?.let { link ->
+                                IconButton(onClick = {
+                                    context.startActivity(
+                                        Intent.createChooser(
+                                            Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, link)
+                                            },
+                                            "اشتراک لینک محصول"
+                                        )
+                                    )
+                                }) {
+                                    Icon(Icons.Outlined.Share, "اشتراک لینک مستقیم محصول", tint = Success)
                                 }
                             }
                             IconButton(onClick = {

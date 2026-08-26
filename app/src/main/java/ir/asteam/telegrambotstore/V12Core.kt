@@ -43,6 +43,7 @@ enum class V12Page(val title: String) {
     SUBSCRIPTIONS("اشتراک ربات‌ها"),
     CONNECT("اتصال ربات"),
     BOT_MANAGER("مدیریت ربات"),
+    GENERAL_MANAGEMENT("مدیریت عمومی"),
     PRODUCTS("محصولات"),
     CATEGORIES("دسته‌بندی‌ها"),
     PREVIEW("پیش‌نمایش ربات"),
