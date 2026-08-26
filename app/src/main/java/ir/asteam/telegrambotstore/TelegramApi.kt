@@ -32,6 +32,9 @@ object TelegramApi {
     // Endpoint Sync محصولات و دسته‌بندی‌های محلی را به فروشگاه واقعی Telegram منتقل می‌کند.
     private const val SYNC_ENDPOINT = "$BACKEND_BASE/botstore-sync"
 
+    // Endpoint حذف اتصال، Webhook تلگرام و رکورد Backend همان Bot را پاک می‌کند.
+    private const val DISCONNECT_ENDPOINT = "$BACKEND_BASE/botstore-disconnect"
+
     // نام قدیمی این تابع برای سازگاری UI حفظ شده است، اما حالا اتصال واقعی Backend و setWebhook را انجام می‌دهد.
     suspend fun validateToken(token: String): Result<TelegramBotInfo> = connectBot(token)
 
@@ -59,6 +62,28 @@ object TelegramApi {
                 username = bot.optString("username"),
                 firstName = bot.optString("first_name")
             )
+        }
+    }
+
+    // این تابع اتصال واقعی Bot را از Backend حذف می‌کند تا حذف داخل APK، Bot را روی سرور فعال باقی نگذارد.
+    suspend fun disconnectBot(token: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            // Token خالی یا فرمت نامعتبر به Backend فرستاده نمی‌شود.
+            require(token.matches(Regex("^[0-9]{6,12}:[A-Za-z0-9_-]{20,}$"))) { "فرمت توکن صحیح نیست" }
+
+            // Token همان Bot برای اثبات کنترل و lookup رکورد server-only ارسال می‌شود.
+            val payload = JSONObject().put("token", token)
+
+            // Endpoint ابتدا deleteWebhook و سپس حذف رکورد Backend را انجام می‌دهد.
+            val response = postJson(DISCONNECT_ENDPOINT, payload)
+
+            // خطای Backend به Result شکست تبدیل می‌شود تا Provider بتواند آن را Log کند.
+            if (!response.optBoolean("ok")) {
+                error(response.optString("message", "حذف اتصال ربات از Backend ناموفق بود"))
+            }
+
+            // disconnected=true یعنی رکورد فعلی حذف شد؛ already_removed نیز عملیات موفق محسوب می‌شود.
+            response.optBoolean("disconnected") || response.optBoolean("already_removed")
         }
     }
 
