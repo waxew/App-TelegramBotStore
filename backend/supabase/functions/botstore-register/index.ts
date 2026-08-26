@@ -38,6 +38,7 @@ function makeWebhookSecret() {
 }
 
 Deno.serve(async (req) => {
+  // Endpoint ثبت فقط درخواست POST می‌پذیرد.
   if (req.method !== 'POST') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405)
 
   try {
@@ -81,6 +82,12 @@ Deno.serve(async (req) => {
       .single()
 
     if (botError || !bot) throw botError ?? new Error('Bot registration failed')
+
+    // هم‌زمان با اولین اتصال، رکورد تنظیمات عمومی همان فروشگاه ساخته می‌شود؛ اتصال مجدد متن‌های قبلی را بازنویسی نمی‌کند.
+    const { error: settingsError } = await supabase
+      .from('botstore_settings')
+      .upsert({ bot_id: Number(bot.id) }, { onConflict: 'bot_id', ignoreDuplicates: true })
+    if (settingsError) throw settingsError
 
     // یک Webhook مشترک چندرباته استفاده می‌شود و bot_id مشخص می‌کند Update متعلق به کدام فروشگاه است.
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
