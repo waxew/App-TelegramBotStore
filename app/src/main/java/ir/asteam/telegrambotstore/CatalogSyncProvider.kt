@@ -13,7 +13,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -53,7 +52,7 @@ class CatalogSyncProvider : ContentProvider() {
             prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
         }
 
-        // Sync اولیه باعث می‌شود Catalog ذخیره‌شده بعد از بروزرسانی به v1.3.1 نیز به Backend منتقل شود.
+        // Sync اولیه باعث می‌شود Catalog ذخیره‌شده پس از Update نیز به Backend صحیح منتقل شود.
         scheduleCatalogSync(initialDelayMillis = INITIAL_SYNC_DELAY_MS)
 
         // true یعنی Provider با موفقیت آماده شده است.
@@ -81,17 +80,24 @@ class CatalogSyncProvider : ContentProvider() {
             // اگر رباتی متصل نیست، هیچ درخواست شبکه‌ای لازم نیست.
             if (telegramBots.isEmpty()) return@launch
 
-            // آخرین نسخه دسته‌بندی‌ها از حافظه محلی خوانده می‌شود.
-            val categories = store.loadCategories()
+            // کل دسته‌بندی‌ها یک بار از SharedPreferences خوانده می‌شوند.
+            val allCategories = store.loadCategories()
 
-            // آخرین نسخه محصولات از حافظه محلی خوانده می‌شود.
-            val products = store.loadProducts()
+            // کل محصولات یک بار از SharedPreferences خوانده می‌شوند.
+            val allProducts = store.loadProducts()
 
-            // ساختار فعلی LocalStore هنوز Catalog را سراسری نگه می‌دارد؛ بنابراین همان Catalog روی تمام Botهای فعال Sync می‌شود.
+            // هر Bot فقط Catalog خودش را دریافت می‌کند؛ داده فروشگاه‌ها دیگر بین Botها مخلوط نمی‌شود.
             telegramBots.forEach { bot ->
-                // درخواست Sync اجرا و نتیجه بدون افشای Token در Log ثبت می‌شود.
-                TelegramApi.syncCatalog(bot.token, categories, products)
+                // دسته‌بندی‌های همین Bot بر اساس botId جدا می‌شوند.
+                val botCategories = allCategories.filter { category -> category.botId == bot.id }
+
+                // محصولات همین Bot بر اساس botId جدا می‌شوند.
+                val botProducts = allProducts.filter { product -> product.botId == bot.id }
+
+                // درخواست Sync فقط با Catalog اختصاصی همین Token اجرا می‌شود.
+                TelegramApi.syncCatalog(bot.token, botCategories, botProducts)
                     .onSuccess { result ->
+                        // فقط Username و تعداد آیتم‌ها Log می‌شوند و Token هیچ‌وقت چاپ نمی‌شود.
                         Log.i(
                             TAG,
                             "Catalog synced for @${bot.username}: ${result.categoriesSynced} categories, ${result.productsSynced} products"
