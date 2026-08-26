@@ -1,4 +1,4 @@
-// این فایل Activity اصلی و پوسته ناوبری نسخه ۱.۳.۰ را مدیریت می‌کند.
+// این فایل Activity اصلی و پوسته ناوبری نسخه ۱.۳.۱ را مدیریت می‌کند.
 package ir.asteam.telegrambotstore
 
 // BackHandler برای کنترل اصولی دکمه Back و جلوگیری از خروج ناخواسته استفاده می‌شود.
@@ -31,6 +31,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 // Context فعلی Compose برای Intent اشتراک‌گذاری استفاده می‌شود.
 import androidx.compose.ui.platform.LocalContext
+// واحد dp برای padding استاندارد Compose استفاده می‌شود.
+import androidx.compose.ui.unit.dp
 // CoroutineScope برای باز و بسته کردن Drawer استفاده می‌شود.
 import kotlinx.coroutines.launch
 // ArrayDeque برای نگهداری history صفحات استفاده می‌شود.
@@ -63,7 +65,7 @@ class V12Activity : ComponentActivity() {
                     error = Danger
                 )
             ) {
-                // پوسته اصلی نسخه ۱.۳.۰ نمایش داده می‌شود.
+                // پوسته اصلی نسخه ۱.۳.۱ نمایش داده می‌شود.
                 V12Root()
             }
         }
@@ -280,6 +282,10 @@ private fun V12Root() {
             // داشبورد صفحه ریشه می‌شود.
             replaceWith(V12Page.DASHBOARD)
         },
+        onSelectBot = { bot ->
+            // شناسه Bot انتخاب‌شده واقعاً تغییر می‌کند تا مدیریت، Catalog، سفارش‌ها و کاربران همان فروشگاه را هدف بگیرند.
+            selectedBotId = bot.id
+        },
         onBotUpdate = { updated ->
             // Bot ویرایش‌شده داخل لیست جایگزین می‌شود.
             bots = bots.map { if (it.id == updated.id) updated else it }
@@ -359,6 +365,8 @@ private fun V12Shell(
     onPlatform: (BotPlatform) -> Unit,
     onSelectPlan: (SubscriptionPlan) -> Unit,
     onConnected: (ConnectedBot) -> Unit,
+    // انتخاب Bot فقط state انتخاب را تغییر می‌دهد و برخلاف ویرایش، داده Bot را دوباره ذخیره نمی‌کند.
+    onSelectBot: (ConnectedBot) -> Unit,
     onBotUpdate: (ConnectedBot) -> Unit,
     onBotDelete: (ConnectedBot) -> Unit,
     onCategories: (List<StoreCategory>) -> Unit,
@@ -448,7 +456,7 @@ private fun V12Shell(
                     scope.launch { drawer.close() }
                 }
                 // جداکننده بخش عمومی نمایش داده می‌شود.
-                HorizontalDivider(color = Color.White.copy(alpha = .07f), modifier = androidx.compose.ui.Modifier.padding(vertical = androidx.compose.ui.unit.dp(6f)))
+                HorizontalDivider(color = Color.White.copy(alpha = .07f), modifier = androidx.compose.ui.Modifier.padding(vertical = 6.dp))
                 // معرفی به دوستان Intent اشتراک‌گذاری می‌سازد.
                 DrawerItem(Icons.Outlined.Share, "معرفی به دوستان", false) {
                     // Intent ارسال متن ساخته می‌شود.
@@ -482,7 +490,7 @@ private fun V12Shell(
                     scope.launch { drawer.close() }
                 }
                 // جداکننده حساب نمایش داده می‌شود.
-                HorizontalDivider(color = Color.White.copy(alpha = .07f), modifier = androidx.compose.ui.Modifier.padding(vertical = androidx.compose.ui.unit.dp(6f)))
+                HorizontalDivider(color = Color.White.copy(alpha = .07f), modifier = androidx.compose.ui.Modifier.padding(vertical = 6.dp))
                 // اگر کاربر وارد است خروج وگرنه ورود نمایش داده می‌شود.
                 if (loggedIn) {
                     DrawerItem(Icons.Outlined.Logout, "خروج از حساب", false) {
@@ -551,11 +559,9 @@ private fun V12Shell(
                         userName = userName,
                         onNeedAuth = onNeedAuth,
                         onSelectBot = { bot ->
-                            selectedBot?.let { /* فقط برای حفظ state در Composition */ }
-                            // Bot انتخاب‌شده از طریق callback Activity مدیریت می‌شود.
-                            if (bot.id != selectedBotId) {
-                                // در نسخه فعلی callback مستقیم تغییر selectedBotId در این سطح وجود ندارد؛ مدیریت Bot از Dashboard با همان Bot انجام می‌شود.
-                            }
+                            // ابتدا Bot انتخاب‌شده در Root ثبت می‌شود تا تمام صفحات بعدی به همان فروشگاه متصل باشند.
+                            onSelectBot(bot)
+                            // سپس صفحه مدیریت همان Bot باز می‌شود.
                             onPage(V12Page.BOT_MANAGER)
                         },
                         onSubscriptions = onSubscriptions,
