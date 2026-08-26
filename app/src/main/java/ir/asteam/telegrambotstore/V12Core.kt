@@ -37,7 +37,7 @@ val Success = Color(0xFF2DD4BF)
 val Warning = Color(0xFFFFB84D)
 val Danger = Color(0xFFFF5D73)
 
-// فقط صفحاتی که اکنون داخل V12Activity route شده‌اند در enum قرار می‌گیرند تا when اصلی همیشه exhaustive بماند.
+// این enum تمام صفحات route شده داخل V12Activity را تعریف می‌کند تا when اصلی همیشه exhaustive بماند.
 enum class V12Page(val title: String) {
     DASHBOARD("داشبورد"),
     SUBSCRIPTIONS("اشتراک ربات‌ها"),
@@ -46,6 +46,8 @@ enum class V12Page(val title: String) {
     PRODUCTS("محصولات"),
     CATEGORIES("دسته‌بندی‌ها"),
     PREVIEW("پیش‌نمایش ربات"),
+    ORDERS("سفارش‌ها"),
+    CUSTOMERS("کاربران فروشگاه"),
     SETTINGS("تنظیمات"),
     SYNC("همگام‌سازی ربات‌ها"),
     ABOUT("درباره ما"),
