@@ -1,10 +1,16 @@
-*.iml
+# فایل‌های تولیدی Gradle نباید در Git ثبت شوند.
 .gradle/
-/local.properties
-/.idea/
+# خروجی build تمام ماژول‌ها نادیده گرفته می‌شود.
+build/
+# فایل local.properties معمولاً شامل مسیر محلی Android SDK است و نباید commit شود.
+local.properties
+# تنظیمات محلی Android Studio نادیده گرفته می‌شود.
+.idea/
+# فایل‌های سیستم macOS نادیده گرفته می‌شوند.
 .DS_Store
-/build/
-/captures/
-.externalNativeBuild/
-.cxx/
-app/build/
+# فایل‌های امضای خصوصی Android هرگز نباید وارد مخزن عمومی شوند.
+*.jks
+# Keystoreهای با پسوند keystore نیز نادیده گرفته می‌شوند.
+*.keystore
+# فایل‌های idsig حاصل از امضای APK نادیده گرفته می‌شوند.
+*.idsig
