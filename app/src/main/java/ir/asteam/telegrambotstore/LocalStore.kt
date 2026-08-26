@@ -20,6 +20,10 @@ data class StoreProduct(
     val category: String,
     val description: String = "",
     val active: Boolean = true,
+    // وقتی false باشد Product مانند نسخه‌های قبلی موجودی نامحدود دارد.
+    val stockEnabled: Boolean = false,
+    // تعداد موجودی فقط وقتی stockEnabled=true مصرف می‌شود و همیشه نامنفی نگه داشته می‌شود.
+    val stockQuantity: Int = 0,
     val botId: String = ""
 )
 
@@ -350,6 +354,9 @@ class LocalStore(context: Context) {
                             category = item.optString("category"),
                             description = item.optString("description"),
                             active = item.optBoolean("active", true),
+                            // Productهای نسخه‌های قبلی که فیلد Stock ندارند نامحدود باقی می‌مانند.
+                            stockEnabled = item.optBoolean("stockEnabled", false),
+                            stockQuantity = item.optInt("stockQuantity", 0).coerceAtLeast(0),
                             // نبود botId در نسخه‌های قبلی به مالک اصلی مهاجرت می‌کند.
                             botId = item.optString("botId").ifBlank { legacyBotId }
                         )
@@ -374,6 +381,9 @@ class LocalStore(context: Context) {
                     put("category", item.category)
                     put("description", item.description)
                     put("active", item.active)
+                    // تنظیم موجودی برای Sync نسخه 1.5 در همان کلید قدیمی products ذخیره می‌شود تا مهاجرت ساده بماند.
+                    put("stockEnabled", item.stockEnabled)
+                    put("stockQuantity", item.stockQuantity.coerceAtLeast(0))
                     put("botId", item.botId)
                 }
             )

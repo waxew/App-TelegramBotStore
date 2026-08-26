@@ -145,6 +145,8 @@ object TelegramApi {
                             .put("category_source_id", categoryIdByTitle[product.category].orEmpty())
                             .put("description", product.description)
                             .put("active", product.active)
+                            .put("stock_enabled", product.stockEnabled)
+                            .put("stock_quantity", product.stockQuantity.coerceAtLeast(0))
                     )
                 }
             }

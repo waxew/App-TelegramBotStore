@@ -710,6 +710,8 @@ fun V12Products(
 
     // Dialog افزودن محصول کنترل می‌شود.
     var add by remember { mutableStateOf(false) }
+    // Product انتخاب‌شده برای ویرایش قیمت، دسته و موجودی نگهداری می‌شود.
+    var editingProduct by remember { mutableStateOf<StoreProduct?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         if (visibleProducts.isEmpty()) {
@@ -733,6 +735,18 @@ fun V12Products(
                                 if (product.category.isNotBlank()) {
                                     Text(product.category, color = TextMuted, fontSize = 9.sp)
                                 }
+                                // وضعیت موجودی روی کارت Product بدون ورود به Dialog قابل مشاهده است.
+                                Text(
+                                    if (!product.stockEnabled) "موجودی: نامحدود"
+                                    else if (product.stockQuantity <= 0) "ناموجود"
+                                    else "موجودی: ${product.stockQuantity.toPersian()}",
+                                    color = if (product.stockEnabled && product.stockQuantity <= 0) Danger else TextMuted,
+                                    fontSize = 9.sp
+                                )
+                            }
+                            // ویرایش Product موجود شناسه پایدار آن را حفظ می‌کند.
+                            IconButton(onClick = { editingProduct = product }) {
+                                Icon(Icons.Outlined.Edit, "ویرایش محصول", tint = Blue)
                             }
                             // لینک پایدار Product با UUID محلی ساخته و از Share Sheet سیستم ارسال می‌شود.
                             TelegramApi.productDeepLink(ownerBot?.username.orEmpty(), product.id)?.let { link ->
@@ -772,6 +786,9 @@ fun V12Products(
         var title by remember { mutableStateOf("") }
         var price by remember { mutableStateOf("") }
         var category by remember { mutableStateOf(visibleCategories.firstOrNull()?.title ?: "") }
+        // موجودی برای Product جدید اختیاری است؛ خاموش بودن یعنی نامحدود مانند نسخه‌های قبلی.
+        var stockEnabled by remember { mutableStateOf(false) }
+        var stockQuantity by remember { mutableStateOf("0") }
 
         AlertDialog(
             onDismissRequest = { add = false },
@@ -787,6 +804,23 @@ fun V12Products(
                         singleLine = true
                     )
                     OutlinedTextField(category, { category = it }, label = { Text("دسته‌بندی") }, singleLine = true)
+                    // Switch مشخص می‌کند موجودی این Product محدود است یا نامحدود.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("ردیابی موجودی", fontWeight = FontWeight.Bold)
+                            Text(if (stockEnabled) "فروش بیشتر از موجودی جلوگیری می‌شود" else "موجودی نامحدود", color = TextMuted, fontSize = 9.sp)
+                        }
+                        Switch(stockEnabled, { stockEnabled = it })
+                    }
+                    if (stockEnabled) {
+                        OutlinedTextField(
+                            stockQuantity,
+                            { stockQuantity = it.filter(Char::isDigit) },
+                            label = { Text("تعداد موجودی") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -796,15 +830,79 @@ fun V12Products(
                             title = title.trim(),
                             price = price.toLongOrNull() ?: 0,
                             category = category.trim(),
+                            stockEnabled = stockEnabled,
+                            stockQuantity = if (stockEnabled) stockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0,
                             botId = ownerBotId
                         )
                         saveVisibleProducts(visibleProducts + newProduct)
                         add = false
                     },
-                    enabled = title.isNotBlank() && price.toLongOrNull() != null
+                    enabled = title.isNotBlank() && price.toLongOrNull() != null &&
+                        (!stockEnabled || stockQuantity.toIntOrNull() != null)
                 ) { Text("ذخیره") }
             },
             dismissButton = { TextButton(onClick = { add = false }) { Text("انصراف") } }
+        )
+    }
+
+    // Dialog ویرایش Product همان UUID را نگه می‌دارد تا Cart و Deep Link آن بعد از تغییر نشکنند.
+    editingProduct?.let { product ->
+        var editTitle by remember(product.id) { mutableStateOf(product.title) }
+        var editPrice by remember(product.id) { mutableStateOf(product.price.toString()) }
+        var editCategory by remember(product.id) { mutableStateOf(product.category) }
+        var editStockEnabled by remember(product.id) { mutableStateOf(product.stockEnabled) }
+        var editStockQuantity by remember(product.id) { mutableStateOf(product.stockQuantity.toString()) }
+
+        AlertDialog(
+            onDismissRequest = { editingProduct = null },
+            title = { Text("ویرایش محصول") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(editTitle, { editTitle = it }, label = { Text("نام محصول") }, singleLine = true)
+                    OutlinedTextField(
+                        editPrice,
+                        { editPrice = it.filter(Char::isDigit) },
+                        label = { Text("قیمت (تومان)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    OutlinedTextField(editCategory, { editCategory = it }, label = { Text("دسته‌بندی") }, singleLine = true)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("ردیابی موجودی", fontWeight = FontWeight.Bold)
+                            Text(if (editStockEnabled) "Checkout موجودی را کنترل و کم می‌کند" else "موجودی نامحدود", color = TextMuted, fontSize = 9.sp)
+                        }
+                        Switch(editStockEnabled, { editStockEnabled = it })
+                    }
+                    if (editStockEnabled) {
+                        OutlinedTextField(
+                            editStockQuantity,
+                            { editStockQuantity = it.filter(Char::isDigit) },
+                            label = { Text("تعداد موجودی") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val updated = product.copy(
+                            title = editTitle.trim(),
+                            price = editPrice.toLongOrNull() ?: product.price,
+                            category = editCategory.trim(),
+                            stockEnabled = editStockEnabled,
+                            stockQuantity = if (editStockEnabled) editStockQuantity.toIntOrNull()?.coerceAtLeast(0) ?: 0 else 0
+                        )
+                        saveVisibleProducts(visibleProducts.map { old -> if (old.id == product.id) updated else old })
+                        editingProduct = null
+                    },
+                    enabled = editTitle.isNotBlank() && editPrice.toLongOrNull() != null &&
+                        (!editStockEnabled || editStockQuantity.toIntOrNull() != null)
+                ) { Text("ذخیره تغییرات") }
+            },
+            dismissButton = { TextButton(onClick = { editingProduct = null }) { Text("انصراف") } }
         )
     }
 }
