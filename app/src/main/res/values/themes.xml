@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- این فایل تم پایه Android برای پنجره‌ی Compose را تعریف می‌کند. -->
 <resources>
+    <!-- تم اصلی بدون ActionBar است تا نوار بالای برنامه کاملاً توسط Compose کنترل شود. -->
     <style name="Theme.TelegramBotStore" parent="android:style/Theme.Material.NoActionBar">
+        <!-- فونت پیش‌فرض سیستم برای سازگاری فارسی استفاده می‌شود. -->
         <item name="android:fontFamily">sans</item>
+        <!-- آیکون‌های status bar روشن نمی‌شوند چون پس‌زمینه تاریک است. -->
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#111827</item>
-        <item name="android:navigationBarColor">#0B1220</item>
+        <!-- رنگ status bar با تم جدید هماهنگ می‌شود. -->
+        <item name="android:statusBarColor">#07111F</item>
+        <!-- رنگ navigation bar با پس‌زمینه برنامه هماهنگ می‌شود. -->
+        <item name="android:navigationBarColor">#07111F</item>
+        <!-- ActionMode روی محتوای اصلی overlay می‌شود. -->
         <item name="android:windowActionModeOverlay">true</item>
     </style>
 </resources>
